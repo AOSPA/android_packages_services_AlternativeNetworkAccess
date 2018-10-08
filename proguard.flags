@@ -1,0 +1,3 @@
+# Keep all ANS classes and its members
+-keep class com.android.ans.** {*;}
+-verbose
