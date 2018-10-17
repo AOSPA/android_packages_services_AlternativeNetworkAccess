@@ -329,7 +329,8 @@ public class ANSProfileSelector {
      * select primary profile for data
      */
     public void selectPrimaryProfileForData() {
-        mSubscriptionManager.setPreferredData(mSubscriptionManager.getDefaultSubscriptionId());
+        mSubscriptionManager.setPreferredData(mSubscriptionManager.getSlotIndex(
+                mSubscriptionManager.getDefaultSubscriptionId()));
     }
 
     /**
@@ -344,8 +345,6 @@ public class ANSProfileSelector {
 
     protected void init(Context c, ANSProfileSelectionCallback profileSelectionCallback) {
         mContext = c;
-        mNetworkScanCtlr = new ANSNetworkScanCtlr(mContext, mTelephonyManager,
-                mNetworkAvailableCallBack);
         mSequenceId = START_SEQUENCE_ID;
         mProfileSelectionCallback = profileSelectionCallback;
         mTelephonyManager = (TelephonyManager)
@@ -353,6 +352,8 @@ public class ANSProfileSelector {
         mSubscriptionManager = (SubscriptionManager)
                 mContext.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
         mRegMonitor = new ANSServiceStateMonitor(mContext, mServiceMonitorCallback);
+        mNetworkScanCtlr = new ANSNetworkScanCtlr(mContext, mTelephonyManager,
+                mNetworkAvailableCallBack);
 
         /* register for profile update events */
         mSubscriptionManager.addOnOpportunisticSubscriptionsChangedListener(
