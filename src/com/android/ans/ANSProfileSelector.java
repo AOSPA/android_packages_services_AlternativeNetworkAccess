@@ -69,7 +69,8 @@ public class ANSProfileSelector {
     @VisibleForTesting
     protected ANSNetworkScanCtlr mNetworkScanCtlr;
 
-    private SubscriptionManager mSubscriptionManager;
+    @VisibleForTesting
+    protected SubscriptionManager mSubscriptionManager;
     private ANSProfileSelectionCallback mProfileSelectionCallback;
     private int mSequenceId;
 
@@ -79,7 +80,8 @@ public class ANSProfileSelector {
             "android.intent.action.SUBSCRIPTION_SWITCH_REPLY";
 
     /* service monitor callback will get called for service state change on a particular subId. */
-    private ANSServiceStateMonitor.ANSServiceMonitorCallback mServiceMonitorCallback =
+    @VisibleForTesting
+    protected ANSServiceStateMonitor.ANSServiceMonitorCallback mServiceMonitorCallback =
             new ANSServiceStateMonitor.ANSServiceMonitorCallback() {
                 @Override
                 public void onServiceMonitorUpdate(int subId, int state) {
@@ -93,7 +95,9 @@ public class ANSProfileSelector {
                 }
             };
 
-    private SubscriptionManager.OnOpportunisticSubscriptionsChangedListener mProfileChangeListener =
+    @VisibleForTesting
+    protected SubscriptionManager.OnOpportunisticSubscriptionsChangedListener
+            mProfileChangeListener =
             new SubscriptionManager.OnOpportunisticSubscriptionsChangedListener() {
                 @Override
                 public void onOpportunisticSubscriptionsChanged() {
@@ -308,7 +312,6 @@ public class ANSProfileSelector {
             mNetworkScanCtlr.startFastNetworkScan(subscriptionInfos);
         } else if (subscriptionInfos.size() == 0) {
             /* check if no profile */
-            log("checkProfileUpdate 0 out");
             mNetworkScanCtlr.stopNetworkScan();
         }
     }
@@ -343,6 +346,7 @@ public class ANSProfileSelector {
         }
     }
 
+    @VisibleForTesting
     protected void init(Context c, ANSProfileSelectionCallback profileSelectionCallback) {
         mContext = c;
         mSequenceId = START_SEQUENCE_ID;

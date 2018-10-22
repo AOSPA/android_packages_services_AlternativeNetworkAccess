@@ -140,7 +140,7 @@ public class ANSNetworkScanCtlr {
      */
     public void analyzeScanResults(List<CellInfo> results) {
         /* Inform registrants about availability of network */
-        if (results != null) {
+        if (mIsScanActive && results != null) {
             List<CellInfo> filteredResults = new ArrayList<CellInfo>();
             synchronized (mLock) {
                 for (CellInfo cellInfo : results) {

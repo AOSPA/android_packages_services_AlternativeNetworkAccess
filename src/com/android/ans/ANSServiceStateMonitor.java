@@ -226,7 +226,6 @@ public class ANSServiceStateMonitor {
             if (mPhoneStateListener != null && subId == mSubId) {
                 return mPhoneStateListener;
             }
-
             mSubId = subId;
             mPhoneStateListener = (PhoneStateListener) new PhoneStateListenerImpl(subId);
         }

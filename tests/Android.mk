@@ -12,27 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-LOCAL_PATH:= $(call my-dir)
-
-#
-# Mms service
-#
+LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
+LOCAL_MODULE_TAGS := tests
+LOCAL_SRC_FILES := $(call all-java-files-under, src/com/android/ans/)
 
-LOCAL_PACKAGE_NAME := ANS
+LOCAL_JAVA_LIBRARIES := android.test.runner \
+                        telephony-common \
+                        android.test.mock \
+                        android.test.base
+
+LOCAL_STATIC_JAVA_LIBRARIES := \
+        android-support-test \
+        mockito-target \
+        platform-test-annotations
+
+LOCAL_PACKAGE_NAME := ANSTests
 LOCAL_PRIVATE_PLATFORM_APIS := true
-LOCAL_PRIVILEGED_MODULE := true
-
-INCLUDED_MAKEFILES := $(LOCAL_PATH)/tests/Android.mk
-LOCAL_JAVA_LIBRARIES := telephony-common
-LOCAL_SRC_FILES := $(call all-java-files-under, src)
-
-LOCAL_RESOURCE_DIR := $(LOCAL_PATH)/res
-LOCAL_AAPT_FLAGS := --auto-add-overlay
-
 LOCAL_CERTIFICATE := platform
-LOCAL_PRIVILEGED_MODULE := true
-LOCAL_PROGUARD_FLAG_FILES := proguard.flags
-
+LOCAL_INSTRUMENTATION_FOR := ANS
+LOCAL_COMPATIBILITY_SUITE := device-tests
 include $(BUILD_PACKAGE)
-include $(INCLUDED_MAKEFILES)

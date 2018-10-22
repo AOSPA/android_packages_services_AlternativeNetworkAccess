@@ -153,7 +153,8 @@ public class ANSServiceStateEvaluator {
     }
 
     /* service monitor callback will get called for service state change on a particular subId. */
-    ANSServiceStateMonitor.ANSServiceMonitorCallback mServiceMonitorCallback =
+    @VisibleForTesting
+    protected ANSServiceStateMonitor.ANSServiceMonitorCallback mServiceMonitorCallback =
             new ANSServiceStateMonitor.ANSServiceMonitorCallback() {
                 @Override
                 public void onServiceMonitorUpdate(int subId, int state) {
@@ -182,6 +183,7 @@ public class ANSServiceStateEvaluator {
         init(c, serviceEvaluatorCallback);
     }
 
+    @VisibleForTesting
     protected void init(Context c, ANSServiceEvaluatorCallback serviceEvaluatorCallback) {
         mContext = c;
         mServiceEvaluatorCallback = serviceEvaluatorCallback;
