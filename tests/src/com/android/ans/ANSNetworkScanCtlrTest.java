@@ -43,7 +43,6 @@ public class ANSNetworkScanCtlrTest extends ANSBaseTest {
     private int mError;
     private boolean mCallbackInvoked;
     private Looper mLooper;
-    private ANSServiceStateMonitor.PhoneStateListenerImpl mPhoneStateListener;
 
     @Before
     public void setUp() throws Exception {
