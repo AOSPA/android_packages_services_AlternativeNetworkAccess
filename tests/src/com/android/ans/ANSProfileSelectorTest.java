@@ -25,6 +25,7 @@ import android.content.Intent;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.telephony.AvailableNetworkInfo;
 import android.telephony.CellIdentityLte;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoLte;
@@ -113,6 +114,11 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
         CellInfoLte cellInfoLte = new CellInfoLte();
         cellInfoLte.setCellIdentity(cellIdentityLte);
         results2.add((CellInfo)cellInfoLte);
+        ArrayList<String> mccMncs = new ArrayList<>();
+        mccMncs.add("310210");
+        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs);
+        ArrayList<AvailableNetworkInfo> availableNetworkInfos = new ArrayList<AvailableNetworkInfo>();
+        availableNetworkInfos.add(availableNetworkInfo);
 
         mReady = false;
         mCallbackInvoked = false;
@@ -137,7 +143,7 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
 
         // Testing startProfileSelection without any oppotunistic data.
         // should not get any callback invocation.
-        mANSProfileSelector.startProfileSelection();
+        mANSProfileSelector.startProfileSelection(availableNetworkInfos);
         waitUntilReady(100);
         assertFalse(mCallbackInvoked);
     }
@@ -156,6 +162,11 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
         CellInfoLte cellInfoLte = new CellInfoLte();
         cellInfoLte.setCellIdentity(cellIdentityLte);
         results2.add((CellInfo)cellInfoLte);
+        ArrayList<String> mccMncs = new ArrayList<>();
+        mccMncs.add("310210");
+        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs);
+        ArrayList<AvailableNetworkInfo> availableNetworkInfos = new ArrayList<AvailableNetworkInfo>();
+        availableNetworkInfos.add(availableNetworkInfo);
 
         mReady = false;
         new Thread(new Runnable() {
@@ -183,7 +194,7 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
 
         // Testing startProfileSelection with oppotunistic sub.
         // On success onProfileSelectionDone must get invoked.
-        mANSProfileSelector.startProfileSelection();
+        mANSProfileSelector.startProfileSelection(availableNetworkInfos);
         assertFalse(mReady);
         mANSProfileSelector.mNetworkAvailableCallBackCpy.onNetworkAvailability(results2);
         Intent callbackIntent = new Intent(MyANSProfileSelector.ACTION_SUB_SWITCH);

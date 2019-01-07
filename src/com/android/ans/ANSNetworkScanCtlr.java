@@ -29,6 +29,7 @@ import android.telephony.Rlog;
 import android.telephony.SubscriptionInfo;
 import android.telephony.TelephonyManager;
 import android.telephony.TelephonyScanManager;
+import android.telephony.AvailableNetworkInfo;
 
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -197,7 +198,7 @@ public class ANSNetworkScanCtlr {
         return null;
     }
 
-    private NetworkScanRequest createNetworkScanRequest(List<SubscriptionInfo> subscriptionInfos,
+    private NetworkScanRequest createNetworkScanRequest(ArrayList<AvailableNetworkInfo> availableNetworks,
             int periodicity) {
         RadioAccessSpecifier[] ras = new RadioAccessSpecifier[1];
         int[] bands = new int[1];
@@ -207,8 +208,8 @@ public class ANSNetworkScanCtlr {
 
         ArrayList<String> mccMncs = new ArrayList<String>();
         /* retrieve mcc mncs for a subscription id */
-        for (SubscriptionInfo subscriptionInfo : subscriptionInfos) {
-            mccMncs.add(subscriptionInfo.getMccString() + subscriptionInfo.getMncString());
+        for (AvailableNetworkInfo availableNetwork : availableNetworks) {
+            mccMncs.addAll(availableNetwork.getMccMncs());
         }
 
         /* create network scan request */
@@ -224,23 +225,12 @@ public class ANSNetworkScanCtlr {
     }
 
     /**
-     * start high interval network scan
-     * @param subscriptionInfos list of subscriptions for which the scanning needs to be started.
-     * @return true if successfully accepted request.
-     */
-    public boolean startSlowNetworkScan(List<SubscriptionInfo> subscriptionInfos) {
-        NetworkScanRequest networkScanRequest = createNetworkScanRequest(subscriptionInfos,
-                SEARCH_PERIODICITY_SLOW);
-        return startNetworkScan(networkScanRequest);
-    }
-
-    /**
      * start less interval network scan
-     * @param subscriptionInfos list of subscriptions for which the scanning needs to be started.
+     * @param availableNetworks list of subscriptions for which the scanning needs to be started.
      * @return true if successfully accepted request.
      */
-    public boolean startFastNetworkScan(List<SubscriptionInfo> subscriptionInfos) {
-        NetworkScanRequest networkScanRequest = createNetworkScanRequest(subscriptionInfos,
+    public boolean startFastNetworkScan(ArrayList<AvailableNetworkInfo> availableNetworks) {
+        NetworkScanRequest networkScanRequest = createNetworkScanRequest(availableNetworks,
                 SEARCH_PERIODICITY_FAST);
         return startNetworkScan(networkScanRequest);
     }

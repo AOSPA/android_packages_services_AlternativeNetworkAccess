@@ -16,11 +16,12 @@
 package com.android.ans;
 
 import android.content.Context;
-import android.support.test.InstrumentationRegistry;
 import android.telephony.Rlog;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.test.AndroidTestCase;
+
+import androidx.test.InstrumentationRegistry;
 
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;

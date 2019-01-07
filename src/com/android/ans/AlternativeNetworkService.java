@@ -17,19 +17,30 @@
 package com.android.ans;
 
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Binder;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Message;
 import android.os.ServiceManager;
+import android.telephony.AvailableNetworkInfo;
 import android.telephony.Rlog;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.telephony.IAns;
+import com.android.internal.telephony.TelephonyIntents;
 import com.android.internal.telephony.TelephonyPermissions;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 
 /**
  * AlternativeNetworkService implements ians.
@@ -45,11 +56,14 @@ public class AlternativeNetworkService extends Service {
     private boolean mIsEnabled;
     private ANSProfileSelector mProfileSelector;
     private SharedPreferences mSharedPref;
+    private HashMap<String, ANSConfigInput> mANSConfigInputHashMap;
 
     private static final String TAG = "ANS";
     private static final String PREF_NAME = TAG;
     private static final String PREF_ENABLED = "isEnabled";
     private static final String SERVICE_NAME = "ians";
+    private static final String CARRIER_APP_CONFIG_NAME = "carrierApp";
+    private static final String SYSTEM_APP_CONFIG_NAME = "systemApp";
     private static final boolean DBG = true;
 
     /**
@@ -73,6 +87,12 @@ public class AlternativeNetworkService extends Service {
         }
 
         return false;
+    }
+
+    private boolean hasOpportunisticSubPrivilege(String callingPackage, int subId) {
+        return mTelephonyManager.hasCarrierPrivileges(subId)
+                || mSubscriptionManager.canManageSubscription(
+                mProfileSelector.getOpprotunisticSubInfo(subId), callingPackage);
     }
 
     private final IAns.Stub mBinder = new IAns.Stub() {
@@ -180,6 +200,38 @@ public class AlternativeNetworkService extends Service {
                 Binder.restoreCallingIdentity(identity);
             }
         }
+
+        /**
+         * Update availability of a list of networks in the current location.
+         *
+         * This api should be called if the caller is aware of the availability of a network
+         * at the current location. This information will be used by AlternativeNetwork service
+         * to decide to attach to the network. If an empty list is passed,
+         * it is assumed that no network is available.
+         *  @param availableNetworks is a list of available network information.
+         *  @param callingPackage caller's package name
+         *  @return true if request is accepted
+         * <p>
+         * <p>Requires that the calling app has carrier privileges on both primary and
+         * secondary subscriptions (see
+         * {@link #hasCarrierPrivileges}), or has permission
+         * {@link android.Manifest.permission#MODIFY_PHONE_STATE MODIFY_PHONE_STATE}.
+         *
+         */
+        public boolean updateAvailableNetworks(List<AvailableNetworkInfo> availableNetworks,
+                String callingPackage) {
+            /* check if system app */
+            if (enforceModifyPhoneStatePermission(mContext)) {
+                return handleSystemAppAvailableNetworks(
+                        (ArrayList<AvailableNetworkInfo>)availableNetworks);
+            } else {
+                /* check if the app has primary carrier permission */
+                TelephonyPermissions.enforceCallingOrSelfCarrierPrivilege(
+                        mSubscriptionManager.getDefaultSubscriptionId(), "updateAvailableNetworks");
+                return handleCarrierAppAvailableNetworks(
+                        (ArrayList<AvailableNetworkInfo>)availableNetworks, callingPackage);
+            }
+        }
     };
 
     @Override
@@ -217,9 +269,94 @@ public class AlternativeNetworkService extends Service {
         mSharedPref = mContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         mSubscriptionManager = (SubscriptionManager) mContext.getSystemService(
                 Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+        mANSConfigInputHashMap = new HashMap<String, ANSConfigInput>();
         enableAlternativeNetwork(getPersistentEnableState());
     }
 
+    private boolean handleCarrierAppAvailableNetworks(
+            ArrayList<AvailableNetworkInfo> availableNetworks, String callingPackage) {
+        if ((availableNetworks != null) && (availableNetworks.size() > 0)) {
+            /* carrier apps should report only subscription */
+            if (availableNetworks.size() > 1) {
+                log("Carrier app should not pass more than one subscription");
+                return false;
+            }
+
+            if (!mProfileSelector.hasOpprotunisticSub(availableNetworks)) {
+                log("No opportunistic subscriptions received");
+                return false;
+            }
+            TelephonyPermissions.enforceCallingOrSelfCarrierPrivilege(
+                    availableNetworks.get(0).getSubId(), "updateAvailableNetworks");
+
+            /* check if the app has opportunistic carrier permission */
+            if (!hasOpportunisticSubPrivilege(callingPackage,
+                    availableNetworks.get(0).getSubId())) {
+                log("No carrier privelege for opportunistic subscription");
+                return false;
+            }
+            final long identity = Binder.clearCallingIdentity();
+            try {
+                ANSConfigInput ansConfigInput = new ANSConfigInput(availableNetworks);
+                ansConfigInput.setPrimarySub(
+                        mSubscriptionManager.getDefaultVoiceSubscriptionInfo().getSubscriptionId());
+                ansConfigInput.setPreferredDataSub(availableNetworks.get(0).getSubId());
+                mANSConfigInputHashMap.put(CARRIER_APP_CONFIG_NAME, ansConfigInput);
+
+                /* if carrier is reporting availability, then it takes higher priority. */
+                mProfileSelector.startProfileSelection(availableNetworks);
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
+        } else {
+            final long identity = Binder.clearCallingIdentity();
+            try {
+                mANSConfigInputHashMap.put(CARRIER_APP_CONFIG_NAME, null);
+                /* if carrier is reporting unavailability, then decide whether to start
+                   system app request or not. */
+                if (mANSConfigInputHashMap.get(SYSTEM_APP_CONFIG_NAME) != null) {
+                    mProfileSelector.startProfileSelection(
+                            mANSConfigInputHashMap.get(SYSTEM_APP_CONFIG_NAME)
+                                    .getAvailableNetworkInfos());
+                } else {
+                    mProfileSelector.stopProfileSelection();
+                }
+            } finally {
+                Binder.restoreCallingIdentity(identity);
+            }
+        }
+        return true;
+    }
+
+    private boolean handleSystemAppAvailableNetworks(
+            ArrayList<AvailableNetworkInfo> availableNetworks) {
+        final long identity = Binder.clearCallingIdentity();
+        try {
+            if ((availableNetworks != null) && (availableNetworks.size() > 0)) {
+                /* all subscriptions should be opportunistic subscriptions */
+                if (!mProfileSelector.hasOpprotunisticSub(availableNetworks)) {
+                    log("No opportunistic subscriptions received");
+                    return false;
+                }
+                mANSConfigInputHashMap.put(SYSTEM_APP_CONFIG_NAME,
+                        new ANSConfigInput(availableNetworks));
+
+                /* reporting availability. proceed if carrier app has not requested any */
+                if (mANSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME) == null) {
+                    mProfileSelector.startProfileSelection(availableNetworks);
+                }
+            } else {
+                /* reporting unavailability */
+                mANSConfigInputHashMap.put(SYSTEM_APP_CONFIG_NAME, null);
+                if (mANSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME) == null) {
+                    mProfileSelector.stopProfileSelection();
+                }
+            }
+        } finally {
+            Binder.restoreCallingIdentity(identity);
+        }
+        return true;
+    }
 
     private boolean getPersistentEnableState() {
         return mSharedPref.getBoolean(PREF_ENABLED, true);
@@ -239,9 +376,7 @@ public class AlternativeNetworkService extends Service {
         synchronized (mLock) {
             if (mIsEnabled != enable) {
                 updateEnableState(enable);
-                if (mIsEnabled) {
-                    mProfileSelector.startProfileSelection();
-                } else {
+                if (!mIsEnabled) {
                     mProfileSelector.stopProfileSelection();
                 }
             }

@@ -16,6 +16,9 @@
 
 package com.android.ans;
 
+import static android.telephony.AvailableNetworkInfo.PRIORITY_HIGH;
+import static android.telephony.AvailableNetworkInfo.PRIORITY_LOW;
+
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -34,12 +37,16 @@ import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.telephony.AvailableNetworkInfo;
 
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * Profile selector class which will select the right profile based upon
@@ -58,6 +65,7 @@ public class ANSProfileSelector {
 
     /* message to indicate start of profile selection process */
     private static final int MSG_START_PROFILE_SELECTION = 2;
+
     private boolean mIsEnabled = false;
 
     @VisibleForTesting
@@ -75,19 +83,11 @@ public class ANSProfileSelector {
     protected List<SubscriptionInfo> mOppSubscriptionInfos;
     private ANSProfileSelectionCallback mProfileSelectionCallback;
     private int mSequenceId;
+    private int mCurrentDataSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+    private ArrayList<AvailableNetworkInfo> mAvailableNetworkInfos;
 
     public static final String ACTION_SUB_SWITCH =
             "android.intent.action.SUBSCRIPTION_SWITCH_REPLY";
-
-    @VisibleForTesting
-    protected SubscriptionManager.OnOpportunisticSubscriptionsChangedListener
-            mProfileChangeListener =
-            new SubscriptionManager.OnOpportunisticSubscriptionsChangedListener() {
-                @Override
-                public void onOpportunisticSubscriptionsChanged() {
-                    mHandler.sendEmptyMessage(MSG_PROFILE_UPDATE);
-                }
-            };
 
     @VisibleForTesting
     protected Handler mHandler = new Handler() {
@@ -95,12 +95,15 @@ public class ANSProfileSelector {
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case MSG_PROFILE_UPDATE:
-                    updateOpportunisticSubscriptions();
-                    checkProfileUpdate();
+                    synchronized (mLock) {
+                        updateOpportunisticSubscriptions();
+                    }
                     break;
                 case MSG_START_PROFILE_SELECTION:
                     logDebug("Msg received for profile update");
-                    checkProfileUpdate();
+                    synchronized (mLock) {
+                        checkProfileUpdate((ArrayList<AvailableNetworkInfo>) msg.obj);
+                    }
                     break;
                 default:
                     log("invalid message");
@@ -120,6 +123,7 @@ public class ANSProfileSelector {
                     int sequenceId;
                     int subId;
                     String action = intent.getAction();
+                    logDebug("ACTION_SUB_SWITCH : " + action);
                     if (!mIsEnabled || action == null) {
                         return;
                     }
@@ -129,11 +133,13 @@ public class ANSProfileSelector {
                             sequenceId = intent.getIntExtra("sequenceId",  INVALID_SEQUENCE_ID);
                             subId = intent.getIntExtra("subId",
                                     SubscriptionManager.INVALID_SUBSCRIPTION_ID);
+                            logDebug("ACTION_SUB_SWITCH sequenceId: " + sequenceId
+                                    + " mSequenceId: " + mSequenceId);
                             if (sequenceId != mSequenceId) {
                                 return;
                             }
 
-                            onSubSwitchComplete(subId);
+                            onSubSwitchComplete();
                             break;
                     }
                 }
@@ -147,18 +153,8 @@ public class ANSProfileSelector {
             new ANSNetworkScanCtlr.NetworkAvailableCallBack() {
                 @Override
                 public void onNetworkAvailability(List<CellInfo> results) {
-                    /* sort the results according to signal strength level */
-                    Collections.sort(results, new Comparator<CellInfo>() {
-                        @Override
-                        public int compare(CellInfo cellInfo1, CellInfo cellInfo2) {
-                            return getSignalLevel(cellInfo1) - getSignalLevel(cellInfo2);
-                        }
-                    });
-
-                    /* get subscription id for the best network scan result */
-                    int subId = getSubId(getMcc(results.get(0)), getMnc(results.get(0)));
+                    int subId = retrieveBestSubscription(results);
                     if (subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-                        /* could not find any matching subscriptions */
                         return;
                     }
 
@@ -176,6 +172,16 @@ public class ANSProfileSelector {
                 }
             };
 
+    @VisibleForTesting
+    protected SubscriptionManager.OnOpportunisticSubscriptionsChangedListener
+            mProfileChangeListener =
+            new SubscriptionManager.OnOpportunisticSubscriptionsChangedListener() {
+                @Override
+                public void onOpportunisticSubscriptionsChanged() {
+                    mHandler.sendEmptyMessage(MSG_PROFILE_UPDATE);
+                }
+            };
+
     /**
      * interface call back to confirm profile selection
      */
@@ -185,6 +191,33 @@ public class ANSProfileSelector {
          * interface call back to confirm profile selection
          */
         void onProfileSelectionDone();
+    }
+
+    class SortSubInfo implements Comparator<SubscriptionInfo>
+    {
+        // Used for sorting in ascending order of sub id
+        public int compare(SubscriptionInfo a, SubscriptionInfo b)
+        {
+            return a.getSubscriptionId() - b.getSubscriptionId();
+        }
+    }
+
+    class SortAvailableNetworks implements Comparator<AvailableNetworkInfo>
+    {
+        // Used for sorting in ascending order of sub id
+        public int compare(AvailableNetworkInfo a, AvailableNetworkInfo b)
+        {
+            return a.getSubId() - b.getSubId();
+        }
+    }
+
+    class SortAvailableNetworksInPriority implements Comparator<AvailableNetworkInfo>
+    {
+        // Used for sorting in descending order of priority (ascending order of priority numbers)
+        public int compare(AvailableNetworkInfo a, AvailableNetworkInfo b)
+        {
+            return a.getPriority() - b.getPriority();
+        }
     }
 
     /**
@@ -207,12 +240,8 @@ public class ANSProfileSelector {
 
     private String getMcc(CellInfo cellInfo) {
         String mcc = "";
-        if (cellInfo instanceof CellInfoGsm) {
-            mcc = ((CellInfoGsm) cellInfo).getCellIdentity().getMccString();
-        } else if (cellInfo instanceof CellInfoLte) {
+        if (cellInfo instanceof CellInfoLte) {
             mcc = ((CellInfoLte) cellInfo).getCellIdentity().getMccString();
-        } else if (cellInfo instanceof CellInfoWcdma) {
-            mcc = ((CellInfoWcdma) cellInfo).getCellIdentity().getMccString();
         }
 
         return mcc;
@@ -220,27 +249,71 @@ public class ANSProfileSelector {
 
     private String getMnc(CellInfo cellInfo) {
         String mnc = "";
-        if (cellInfo instanceof CellInfoGsm) {
-            mnc = ((CellInfoGsm) cellInfo).getCellIdentity().getMncString();
-        } else if (cellInfo instanceof CellInfoLte) {
+        if (cellInfo instanceof CellInfoLte) {
             mnc = ((CellInfoLte) cellInfo).getCellIdentity().getMncString();
-        } else if (cellInfo instanceof CellInfoWcdma) {
-            mnc = ((CellInfoWcdma) cellInfo).getCellIdentity().getMncString();
         }
 
         return mnc;
     }
 
-    private int getSubId(String mcc, String mnc) {
-        List<SubscriptionInfo> subscriptionInfos = mOppSubscriptionInfos;
-        for (SubscriptionInfo subscriptionInfo : subscriptionInfos) {
-            if (TextUtils.equals(subscriptionInfo.getMccString(), mcc)
-                    && TextUtils.equals(subscriptionInfo.getMncString(), mnc)) {
-                return subscriptionInfo.getSubscriptionId();
+    private int getSubIdUsingAvailableNetworks(String mcc, String mnc, int priorityLevel) {
+        String mccMnc = mcc + mnc;
+        for (AvailableNetworkInfo availableNetworkInfo : mAvailableNetworkInfos) {
+            if (availableNetworkInfo.getPriority() != priorityLevel) {
+                continue;
+            }
+            for (String availableMccMnc : availableNetworkInfo.getMccMncs()) {
+                if (TextUtils.equals(availableMccMnc, mccMnc)) {
+                    return availableNetworkInfo.getSubId();
+                }
             }
         }
 
         return SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+    }
+
+    public SubscriptionInfo getOpprotunisticSubInfo(int subId) {
+        if ((mOppSubscriptionInfos == null) || (mOppSubscriptionInfos.size() == 0)) {
+            return null;
+        }
+        for (SubscriptionInfo subscriptionInfo : mOppSubscriptionInfos) {
+            if (subscriptionInfo.getSubscriptionId() == subId) {
+                return subscriptionInfo;
+            }
+        }
+        return null;
+    }
+
+    public boolean isOpprotunisticSub(int subId) {
+        if ((mOppSubscriptionInfos == null) || (mOppSubscriptionInfos.size() == 0)) {
+            return false;
+        }
+        for (SubscriptionInfo subscriptionInfo : mOppSubscriptionInfos) {
+            if (subscriptionInfo.getSubscriptionId() == subId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasOpprotunisticSub(List<AvailableNetworkInfo> availableNetworks) {
+        if ((availableNetworks == null) || (availableNetworks.size() == 0)) {
+            return false;
+        }
+        if ((mOppSubscriptionInfos == null) || (mOppSubscriptionInfos.size() == 0)) {
+            return false;
+        }
+
+        for (AvailableNetworkInfo availableNetworkInfo : availableNetworks) {
+            if (!isOpprotunisticSub(availableNetworkInfo.getSubId())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isAvtiveSub(int subId) {
+        return mSubscriptionManager.isActiveSubscriptionId(subId);
     }
 
     private void switchToSubscription(int subId) {
@@ -257,9 +330,10 @@ public class ANSProfileSelector {
 
     private void switchPreferredData(int subId) {
         mSubscriptionManager.setPreferredData(subId);
+        mCurrentDataSubId = subId;
     }
 
-    private void onSubSwitchComplete(int subId) {
+    private void onSubSwitchComplete() {
         mProfileSelectionCallback.onProfileSelectionDone();
     }
 
@@ -269,18 +343,69 @@ public class ANSProfileSelector {
         }
     }
 
-    private void checkProfileUpdate() {
-        List<SubscriptionInfo> subscriptionInfos = mOppSubscriptionInfos;
-        if (subscriptionInfos == null) {
+    private ArrayList<AvailableNetworkInfo> getFilteredAvailableNetworks(
+            ArrayList<AvailableNetworkInfo> availableNetworks,
+            List<SubscriptionInfo> subscriptionInfoList) {
+        ArrayList<AvailableNetworkInfo> filteredAvailableNetworks =
+                new ArrayList<AvailableNetworkInfo>();
+
+        /* instead of checking each element of a list every element of the other, sort them in
+           the order of sub id and compare to improve the filtering performance. */
+        Collections.sort(subscriptionInfoList, new SortSubInfo());
+        Collections.sort(availableNetworks, new SortAvailableNetworks());
+        int availableNetworksIndex = 0;
+        int subscriptionInfoListIndex = 0;
+        SubscriptionInfo subscriptionInfo = subscriptionInfoList.get(subscriptionInfoListIndex);
+        AvailableNetworkInfo availableNetwork = availableNetworks.get(availableNetworksIndex);
+
+        while (availableNetworksIndex <= availableNetworks.size()
+                && subscriptionInfoListIndex <= subscriptionInfoList.size()) {
+            if (subscriptionInfo.getSubscriptionId() == availableNetwork.getSubId()) {
+                filteredAvailableNetworks.add(availableNetwork);
+            } else if (subscriptionInfo.getSubscriptionId() < availableNetwork.getSubId()) {
+                subscriptionInfoListIndex++;
+                subscriptionInfo = subscriptionInfoList.get(subscriptionInfoListIndex);
+            } else {
+                availableNetworksIndex++;
+                availableNetwork = availableNetworks.get(availableNetworksIndex);
+            }
+        }
+        return filteredAvailableNetworks;
+    }
+
+    private boolean isSame(ArrayList<AvailableNetworkInfo> availableNetworks1,
+            ArrayList<AvailableNetworkInfo> availableNetworks2) {
+        if ((availableNetworks1 == null) || (availableNetworks2 == null)) {
+            return false;
+        }
+        return new HashSet<>(availableNetworks1).equals(new HashSet<>(availableNetworks2));
+    }
+
+    private void checkProfileUpdate(ArrayList<AvailableNetworkInfo> availableNetworks) {
+        if (mOppSubscriptionInfos == null) {
+            logDebug("null subscription infos");
             return;
         }
 
-        if (subscriptionInfos.size() > 0) {
-            logDebug("opportunistic subscriptions size " + subscriptionInfos.size());
+        if (mOppSubscriptionInfos.size() > 0) {
+            logDebug("opportunistic subscriptions size " + mOppSubscriptionInfos.size());
+            ArrayList<AvailableNetworkInfo> filteredAvailableNetworks =
+                    getFilteredAvailableNetworks((ArrayList<AvailableNetworkInfo>)availableNetworks,
+                            mOppSubscriptionInfos);
+            if ((filteredAvailableNetworks.size() == 1)
+                    && ((filteredAvailableNetworks.get(0).getMccMncs() == null)
+                    || (filteredAvailableNetworks.get(0).getMccMncs().size() == 0))) {
+                /* Todo: activate the opportunistic stack */
 
-            /* start scan immediately */
-            mNetworkScanCtlr.startFastNetworkScan(subscriptionInfos);
-        } else if (subscriptionInfos.size() == 0) {
+                /* if subscription is not active, activate the sub */
+                if (!mSubscriptionManager.isActiveSubId(filteredAvailableNetworks.get(0).getSubId())) {
+                    switchToSubscription(filteredAvailableNetworks.get(0).getSubId());
+                }
+            } else {
+                /* start scan immediately */
+                mNetworkScanCtlr.startFastNetworkScan(filteredAvailableNetworks);
+            }
+        } else if (mOppSubscriptionInfos.size() == 0) {
             /* check if no profile */
             mNetworkScanCtlr.stopNetworkScan();
         }
@@ -298,46 +423,95 @@ public class ANSProfileSelector {
         return false;
     }
 
-    public boolean isOpprotunisticSub(int subId) {
-        if ((mOppSubscriptionInfos == null) || (mOppSubscriptionInfos.size() == 0)) {
+    private int retrieveBestSubscription(List<CellInfo> results) {
+        /* sort the results according to signal strength level */
+        Collections.sort(results, new Comparator<CellInfo>() {
+            @Override
+            public int compare(CellInfo cellInfo1, CellInfo cellInfo2) {
+                return getSignalLevel(cellInfo1) - getSignalLevel(cellInfo2);
+            }
+        });
+
+        for (int level = PRIORITY_HIGH; level < PRIORITY_LOW; level++) {
+            for (CellInfo result : results) {
+                /* get subscription id for the best network scan result */
+                int subId = getSubIdUsingAvailableNetworks(getMcc(result), getMnc(result), level);
+                if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+                    return subId;
+                }
+            }
+        }
+
+        return SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+    }
+
+    public boolean containsOpportunisticSubs(ArrayList<AvailableNetworkInfo> availableNetworks) {
+        if (mOppSubscriptionInfos == null) {
+            logDebug("received null subscription infos");
             return false;
         }
-        for (SubscriptionInfo subscriptionInfo : mOppSubscriptionInfos) {
-            if (subscriptionInfo.getSubscriptionId() == subId) {
+
+        if (mOppSubscriptionInfos.size() > 0) {
+            logDebug("opportunistic subscriptions size " + mOppSubscriptionInfos.size());
+            ArrayList<AvailableNetworkInfo> filteredAvailableNetworks =
+                    getFilteredAvailableNetworks(
+                            (ArrayList<AvailableNetworkInfo>)availableNetworks, mOppSubscriptionInfos);
+            if (filteredAvailableNetworks.size() > 0) {
                 return true;
+            }
+        }
+
+        return false;
+    }
+
+    public boolean isOpportunisticSubActive() {
+        if (mOppSubscriptionInfos == null) {
+            logDebug("received null subscription infos");
+            return false;
+        }
+
+        if (mOppSubscriptionInfos.size() > 0) {
+            logDebug("opportunistic subscriptions size " + mOppSubscriptionInfos.size());
+            for (SubscriptionInfo subscriptionInfo : mOppSubscriptionInfos) {
+                if (mSubscriptionManager.isActiveSubId(subscriptionInfo.getSubscriptionId())) {
+                    return true;
+                }
             }
         }
         return false;
     }
 
-    /**
-     * start profile selection procedure
-     */
-    public void startProfileSelection() {
-        synchronized (mLock) {
-            if (!mIsEnabled) {
-                mIsEnabled = true;
-                mHandler.sendEmptyMessage(MSG_START_PROFILE_SELECTION);
-            }
+    public void startProfileSelection(ArrayList<AvailableNetworkInfo> availableNetworks) {
+        if (availableNetworks == null || availableNetworks.size() == 0) {
+            return;
         }
-    }
 
-    /**
-     * select primary profile for data
-     */
-    public void selectPrimaryProfileForData() {
-        mSubscriptionManager.setPreferredData(SubscriptionManager.INVALID_SUBSCRIPTION_ID);
+        synchronized (mLock) {
+            if (isSame(availableNetworks, mAvailableNetworkInfos)) {
+                return;
+            }
+
+            stopProfileSelection();
+            mAvailableNetworkInfos = availableNetworks;
+            /* sort in the order of priority */
+            Collections.sort(mAvailableNetworkInfos, new SortAvailableNetworksInPriority());
+            mIsEnabled = true;
+        }
+        Message message = Message.obtain(mHandler, MSG_START_PROFILE_SELECTION,
+                availableNetworks);
+        message.sendToTarget();
     }
 
     /**
      * select opportunistic profile for data if passing a valid subId.
-     * @param subId : opportunistic subId or SubscriptionManager.INVALID_SUBSCRIPTION_ID if
+     * @param subId : opportunistic subId or SubscriptionManager.DEFAULT_SUBSCRIPTION_ID if
      *              deselecting previously set preference.
      */
     public boolean selectProfileForData(int subId) {
-        if ((subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID)
+        if ((subId == SubscriptionManager.DEFAULT_SUBSCRIPTION_ID)
                 || (isOpprotunisticSub(subId) && isActiveSub(subId))) {
             mSubscriptionManager.setPreferredData(subId);
+            mCurrentDataSubId = subId;
             return true;
         } else {
             log("Inactive sub passed for preferred data " + subId);
@@ -346,8 +520,7 @@ public class ANSProfileSelector {
     }
 
     public int getPreferedData() {
-        // Todo: b/117833883
-        return SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+        return mCurrentDataSubId;
     }
 
     /**
@@ -355,7 +528,10 @@ public class ANSProfileSelector {
      */
     public void stopProfileSelection() {
         mNetworkScanCtlr.stopNetworkScan();
+        /* Todo : bring down the stack */
+
         synchronized (mLock) {
+            mAvailableNetworkInfos = null;
             mIsEnabled = false;
         }
     }

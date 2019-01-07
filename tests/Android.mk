@@ -23,7 +23,7 @@ LOCAL_JAVA_LIBRARIES := android.test.runner \
                         android.test.base
 
 LOCAL_STATIC_JAVA_LIBRARIES := \
-        android-support-test \
+        androidx.test.rules \
         mockito-target \
         platform-test-annotations
 
