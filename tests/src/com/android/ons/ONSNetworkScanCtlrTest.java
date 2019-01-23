@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package com.android.ans;
+package com.android.ons;
 
 import static org.junit.Assert.*;
 import static org.junit.Assert.assertFalse;
@@ -38,8 +38,8 @@ import java.sql.Array;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ANSNetworkScanCtlrTest extends ANSBaseTest {
-    private ANSNetworkScanCtlr mANSNetworkScanCtlr;
+public class ONSNetworkScanCtlrTest extends ONSBaseTest {
+    private ONSNetworkScanCtlr mONSNetworkScanCtlr;
     private NetworkScan mNetworkScan;
     private List<CellInfo> mResults;
     private int mError;
@@ -48,7 +48,7 @@ public class ANSNetworkScanCtlrTest extends ANSBaseTest {
 
     @Before
     public void setUp() throws Exception {
-        super.setUp("ANSTest");
+        super.setUp("ONSTest");
         mLooper = null;
         mNetworkScan = new NetworkScan(1, 1);
         doReturn(mNetworkScan).when(mMockTelephonyManager).requestNetworkScan(anyObject(), anyObject());
@@ -77,13 +77,13 @@ public class ANSNetworkScanCtlrTest extends ANSBaseTest {
         expectedResults.add((CellInfo)cellInfoLte);
         mReady = false;
 
-        // initializing ANSNetworkScanCtlr
+        // initializing ONSNetworkScanCtlr
         new Thread(new Runnable() {
             @Override
             public void run() {
                 Looper.prepare();
-                mANSNetworkScanCtlr = new ANSNetworkScanCtlr(mContext, mMockTelephonyManager,
-                        new ANSNetworkScanCtlr.NetworkAvailableCallBack() {
+                mONSNetworkScanCtlr = new ONSNetworkScanCtlr(mContext, mMockTelephonyManager,
+                        new ONSNetworkScanCtlr.NetworkAvailableCallBack() {
                         @Override
                         public void onNetworkAvailability(List<CellInfo> results) {
                             mResults = results;
@@ -106,8 +106,8 @@ public class ANSNetworkScanCtlrTest extends ANSBaseTest {
         mReady = false;
 
         // Testing startFastNetworkScan, onNetworkAvailability should be called with expectedResults
-        mANSNetworkScanCtlr.startFastNetworkScan(availableNetworkInfos);
-        mANSNetworkScanCtlr.mNetworkScanCallback.onResults(expectedResults);
+        mONSNetworkScanCtlr.startFastNetworkScan(availableNetworkInfos);
+        mONSNetworkScanCtlr.mNetworkScanCallback.onResults(expectedResults);
         waitUntilReady(100);
         assertEquals(expectedResults, mResults);
     }
@@ -127,13 +127,13 @@ public class ANSNetworkScanCtlrTest extends ANSBaseTest {
         mReady = false;
         mError = NetworkScan.SUCCESS;
 
-        // initializing ANSNetworkScanCtlr
+        // initializing ONSNetworkScanCtlr
         new Thread(new Runnable() {
             @Override
             public void run() {
                 Looper.prepare();
-                mANSNetworkScanCtlr = new ANSNetworkScanCtlr(mContext, mMockTelephonyManager,
-                        new ANSNetworkScanCtlr.NetworkAvailableCallBack() {
+                mONSNetworkScanCtlr = new ONSNetworkScanCtlr(mContext, mMockTelephonyManager,
+                        new ONSNetworkScanCtlr.NetworkAvailableCallBack() {
                         @Override
                         public void onNetworkAvailability(List<CellInfo> results) {
                             setReady(true);
@@ -158,8 +158,8 @@ public class ANSNetworkScanCtlrTest extends ANSBaseTest {
         mReady = false;
 
         // Testing startFastNetworkScan, onError should be called with ERROR_INVALID_SCAN
-        mANSNetworkScanCtlr.startFastNetworkScan(availableNetworkInfos);
-        mANSNetworkScanCtlr.mNetworkScanCallback.onError(NetworkScan.ERROR_INVALID_SCAN);
+        mONSNetworkScanCtlr.startFastNetworkScan(availableNetworkInfos);
+        mONSNetworkScanCtlr.mNetworkScanCallback.onError(NetworkScan.ERROR_INVALID_SCAN);
         waitUntilReady(100);
         assertEquals(NetworkScan.ERROR_INVALID_SCAN, mError);
     }
@@ -179,13 +179,13 @@ public class ANSNetworkScanCtlrTest extends ANSBaseTest {
         availableNetworkInfos.add(availableNetworkInfo);
         mReady = false;
 
-        // initializing ANSNetworkScanCtlr
+        // initializing ONSNetworkScanCtlr
         new Thread(new Runnable() {
             @Override
             public void run() {
                 Looper.prepare();
-                mANSNetworkScanCtlr = new ANSNetworkScanCtlr(mContext, mMockTelephonyManager,
-                        new ANSNetworkScanCtlr.NetworkAvailableCallBack() {
+                mONSNetworkScanCtlr = new ONSNetworkScanCtlr(mContext, mMockTelephonyManager,
+                        new ONSNetworkScanCtlr.NetworkAvailableCallBack() {
                         @Override
                         public void onNetworkAvailability(List<CellInfo> results) {
                             mResults = results;
@@ -209,8 +209,8 @@ public class ANSNetworkScanCtlrTest extends ANSBaseTest {
         mReady = false;
 
         // Testing startSlowNetworkScan, onNetworkAvailability should be called with expectedResults
-        mANSNetworkScanCtlr.startFastNetworkScan(availableNetworkInfos);
-        mANSNetworkScanCtlr.mNetworkScanCallback.onResults(expectedResults);
+        mONSNetworkScanCtlr.startFastNetworkScan(availableNetworkInfos);
+        mONSNetworkScanCtlr.mNetworkScanCallback.onResults(expectedResults);
         waitUntilReady(100);
         assertEquals(expectedResults, mResults);
     }
@@ -230,13 +230,13 @@ public class ANSNetworkScanCtlrTest extends ANSBaseTest {
         mCallbackInvoked = false;
         mReady = false;
 
-        // initializing ANSNetworkScanCtlr
+        // initializing ONSNetworkScanCtlr
         new Thread(new Runnable() {
             @Override
             public void run() {
                 Looper.prepare();
-                mANSNetworkScanCtlr = new ANSNetworkScanCtlr(mContext, mMockTelephonyManager,
-                        new ANSNetworkScanCtlr.NetworkAvailableCallBack() {
+                mONSNetworkScanCtlr = new ONSNetworkScanCtlr(mContext, mMockTelephonyManager,
+                        new ONSNetworkScanCtlr.NetworkAvailableCallBack() {
                         @Override
                         public void onNetworkAvailability(List<CellInfo> results) {
                             mCallbackInvoked = true;
@@ -259,9 +259,9 @@ public class ANSNetworkScanCtlrTest extends ANSBaseTest {
         mReady = false;
 
         // Testing stopNetworkScan, should not get any callback invocation after stopNetworkScan.
-        mANSNetworkScanCtlr.startFastNetworkScan(availableNetworkInfos);
-        mANSNetworkScanCtlr.stopNetworkScan();
-        mANSNetworkScanCtlr.mNetworkScanCallback.onResults(expectedResults);
+        mONSNetworkScanCtlr.startFastNetworkScan(availableNetworkInfos);
+        mONSNetworkScanCtlr.stopNetworkScan();
+        mONSNetworkScanCtlr.mNetworkScanCallback.onResults(expectedResults);
         waitUntilReady(100);
         assertFalse(mCallbackInvoked);
     }

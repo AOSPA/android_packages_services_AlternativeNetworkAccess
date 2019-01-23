@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.ans;
+package com.android.ons;
 
 import android.telephony.AvailableNetworkInfo;
 import android.telephony.SubscriptionManager;
@@ -23,18 +23,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * AlternativeNetworkService implements ians.
+ * OpportunisticNetworkService implements ions.
  * It scans network and matches the results with opportunistic subscriptions.
  * Use the same to provide user opportunistic data in areas with corresponding networks
  */
-public class ANSConfigInput {
-    private static final String TAG = "ANSConfigInput";
+public class ONSConfigInput {
+    private static final String TAG = "ONSConfigInput";
     private static final boolean DBG = true;
     private ArrayList<AvailableNetworkInfo> mAvailableNetworkInfos;
     private int mPreferredDataSub;
     private int mPrimarySub;
 
-    ANSConfigInput(ArrayList<AvailableNetworkInfo> availableNetworkInfos) {
+    ONSConfigInput(ArrayList<AvailableNetworkInfo> availableNetworkInfos) {
         mAvailableNetworkInfos = availableNetworkInfos;
         mPreferredDataSub = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
         mPrimarySub = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
@@ -66,7 +66,7 @@ public class ANSConfigInput {
 
     @Override
     public String toString() {
-        return ("ANSConfigInput:"
+        return ("ONSConfigInput:"
                 + " " + mAvailableNetworkInfos
                 + " " + mPreferredDataSub);
     }

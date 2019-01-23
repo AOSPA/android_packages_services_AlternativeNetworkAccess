@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.ans;
+package com.android.ons;
 
 import static android.telephony.AvailableNetworkInfo.PRIORITY_HIGH;
 import static android.telephony.AvailableNetworkInfo.PRIORITY_LOW;
@@ -28,9 +28,7 @@ import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.Message;
 import android.telephony.CellInfo;
-import android.telephony.CellInfoGsm;
 import android.telephony.CellInfoLte;
-import android.telephony.CellInfoWcdma;
 import android.telephony.Rlog;
 import android.telephony.SignalStrength;
 import android.telephony.SubscriptionInfo;
@@ -46,14 +44,13 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.ArrayList;
-import java.util.HashMap;
 
 /**
  * Profile selector class which will select the right profile based upon
  * geographic information input and network scan results.
  */
-public class ANSProfileSelector {
-    private static final String LOG_TAG = "ANSProfileSelector";
+public class ONSProfileSelector {
+    private static final String LOG_TAG = "ONSProfileSelector";
     private static final boolean DBG = true;
     private final Object mLock = new Object();
 
@@ -75,13 +72,13 @@ public class ANSProfileSelector {
     protected TelephonyManager mTelephonyManager;
 
     @VisibleForTesting
-    protected ANSNetworkScanCtlr mNetworkScanCtlr;
+    protected ONSNetworkScanCtlr mNetworkScanCtlr;
 
     @VisibleForTesting
     protected SubscriptionManager mSubscriptionManager;
     @VisibleForTesting
     protected List<SubscriptionInfo> mOppSubscriptionInfos;
-    private ANSProfileSelectionCallback mProfileSelectionCallback;
+    private ONSProfileSelectionCallback mProfileSelectionCallback;
     private int mSequenceId;
     private int mCurrentDataSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
     private ArrayList<AvailableNetworkInfo> mAvailableNetworkInfos;
@@ -149,8 +146,8 @@ public class ANSProfileSelector {
      * Network scan callback handler
      */
     @VisibleForTesting
-    protected ANSNetworkScanCtlr.NetworkAvailableCallBack mNetworkAvailableCallBack =
-            new ANSNetworkScanCtlr.NetworkAvailableCallBack() {
+    protected ONSNetworkScanCtlr.NetworkAvailableCallBack mNetworkAvailableCallBack =
+            new ONSNetworkScanCtlr.NetworkAvailableCallBack() {
                 @Override
                 public void onNetworkAvailability(List<CellInfo> results) {
                     int subId = retrieveBestSubscription(results);
@@ -185,7 +182,7 @@ public class ANSProfileSelector {
     /**
      * interface call back to confirm profile selection
      */
-    public interface ANSProfileSelectionCallback {
+    public interface ONSProfileSelectionCallback {
 
         /**
          * interface call back to confirm profile selection
@@ -221,13 +218,13 @@ public class ANSProfileSelector {
     }
 
     /**
-     * ANSProfileSelector constructor
+     * ONSProfileSelector constructor
      * @param c context
      * @param profileSelectionCallback callback to be called once selection is done
      */
-    public ANSProfileSelector(Context c, ANSProfileSelectionCallback profileSelectionCallback) {
+    public ONSProfileSelector(Context c, ONSProfileSelectionCallback profileSelectionCallback) {
         init(c, profileSelectionCallback);
-        log("ANSProfileSelector init complete");
+        log("ONSProfileSelector init complete");
     }
 
     private int getSignalLevel(CellInfo cellInfo) {
@@ -318,7 +315,7 @@ public class ANSProfileSelector {
 
     private void switchToSubscription(int subId) {
         Intent callbackIntent = new Intent(ACTION_SUB_SWITCH);
-        callbackIntent.setClass(mContext, ANSProfileSelector.class);
+        callbackIntent.setClass(mContext, ONSProfileSelector.class);
         callbackIntent.putExtra("sequenceId", getAndUpdateToken());
         callbackIntent.putExtra("subId", subId);
 
@@ -329,7 +326,7 @@ public class ANSProfileSelector {
     }
 
     private void switchPreferredData(int subId) {
-        mSubscriptionManager.setPreferredData(subId);
+        mSubscriptionManager.setPreferredDataSubscriptionId(subId);
         mCurrentDataSubId = subId;
     }
 
@@ -355,19 +352,21 @@ public class ANSProfileSelector {
         Collections.sort(availableNetworks, new SortAvailableNetworks());
         int availableNetworksIndex = 0;
         int subscriptionInfoListIndex = 0;
-        SubscriptionInfo subscriptionInfo = subscriptionInfoList.get(subscriptionInfoListIndex);
-        AvailableNetworkInfo availableNetwork = availableNetworks.get(availableNetworksIndex);
+        SubscriptionInfo subscriptionInfo;
+        AvailableNetworkInfo availableNetwork;
 
-        while (availableNetworksIndex <= availableNetworks.size()
-                && subscriptionInfoListIndex <= subscriptionInfoList.size()) {
+        while (availableNetworksIndex < availableNetworks.size()
+                && subscriptionInfoListIndex < subscriptionInfoList.size()) {
+            subscriptionInfo = subscriptionInfoList.get(subscriptionInfoListIndex);
+            availableNetwork = availableNetworks.get(availableNetworksIndex);
             if (subscriptionInfo.getSubscriptionId() == availableNetwork.getSubId()) {
                 filteredAvailableNetworks.add(availableNetwork);
+                subscriptionInfoListIndex++;
+                availableNetworksIndex++;
             } else if (subscriptionInfo.getSubscriptionId() < availableNetwork.getSubId()) {
                 subscriptionInfoListIndex++;
-                subscriptionInfo = subscriptionInfoList.get(subscriptionInfoListIndex);
             } else {
                 availableNetworksIndex++;
-                availableNetwork = availableNetworks.get(availableNetworksIndex);
             }
         }
         return filteredAvailableNetworks;
@@ -407,6 +406,7 @@ public class ANSProfileSelector {
             }
         } else if (mOppSubscriptionInfos.size() == 0) {
             /* check if no profile */
+            logDebug("stopping scan");
             mNetworkScanCtlr.stopNetworkScan();
         }
     }
@@ -497,6 +497,7 @@ public class ANSProfileSelector {
             Collections.sort(mAvailableNetworkInfos, new SortAvailableNetworksInPriority());
             mIsEnabled = true;
         }
+        logDebug("startProfileSelection availableNetworks: " + availableNetworks);
         Message message = Message.obtain(mHandler, MSG_START_PROFILE_SELECTION,
                 availableNetworks);
         message.sendToTarget();
@@ -510,7 +511,7 @@ public class ANSProfileSelector {
     public boolean selectProfileForData(int subId) {
         if ((subId == SubscriptionManager.DEFAULT_SUBSCRIPTION_ID)
                 || (isOpprotunisticSub(subId) && isActiveSub(subId))) {
-            mSubscriptionManager.setPreferredData(subId);
+            mSubscriptionManager.setPreferredDataSubscriptionId(subId);
             mCurrentDataSubId = subId;
             return true;
         } else {
@@ -519,14 +520,15 @@ public class ANSProfileSelector {
         }
     }
 
-    public int getPreferedData() {
-        return mCurrentDataSubId;
+    public int getPreferredDataSubscriptionId() {
+        return mSubscriptionManager.getPreferredDataSubscriptionId();
     }
 
     /**
      * stop profile selection procedure
      */
     public void stopProfileSelection() {
+        logDebug("stopProfileSelection");
         mNetworkScanCtlr.stopNetworkScan();
         /* Todo : bring down the stack */
 
@@ -544,7 +546,7 @@ public class ANSProfileSelector {
     }
 
     @VisibleForTesting
-    protected void init(Context c, ANSProfileSelectionCallback profileSelectionCallback) {
+    protected void init(Context c, ONSProfileSelectionCallback profileSelectionCallback) {
         mContext = c;
         mSequenceId = START_SEQUENCE_ID;
         mProfileSelectionCallback = profileSelectionCallback;
@@ -552,7 +554,7 @@ public class ANSProfileSelector {
                 mContext.getSystemService(Context.TELEPHONY_SERVICE);
         mSubscriptionManager = (SubscriptionManager)
                 mContext.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
-        mNetworkScanCtlr = new ANSNetworkScanCtlr(mContext, mTelephonyManager,
+        mNetworkScanCtlr = new ONSNetworkScanCtlr(mContext, mTelephonyManager,
                 mNetworkAvailableCallBack);
         updateOpportunisticSubscriptions();
         /* register for profile update events */

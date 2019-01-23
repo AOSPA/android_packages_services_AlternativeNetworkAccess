@@ -14,19 +14,15 @@
  * limitations under the License.
  */
 
-package com.android.ans;
+package com.android.ons;
 
 import android.app.Service;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Binder;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Message;
 import android.os.ServiceManager;
 import android.telephony.AvailableNetworkInfo;
 import android.telephony.Rlog;
@@ -34,7 +30,7 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.telephony.IAns;
+import com.android.internal.telephony.IOns;
 import com.android.internal.telephony.TelephonyIntents;
 import com.android.internal.telephony.TelephonyPermissions;
 
@@ -43,25 +39,25 @@ import java.util.HashMap;
 import java.util.List;
 
 /**
- * AlternativeNetworkService implements ians.
+ * OpportunisticNetworkService implements ions.
  * It scans network and matches the results with opportunistic subscriptions.
  * Use the same to provide user opportunistic data in areas with corresponding networks
  */
-public class AlternativeNetworkService extends Service {
+public class OpportunisticNetworkService extends Service {
     private Context mContext;
     private TelephonyManager mTelephonyManager;
     private SubscriptionManager mSubscriptionManager;
 
     private final Object mLock = new Object();
     private boolean mIsEnabled;
-    private ANSProfileSelector mProfileSelector;
+    private ONSProfileSelector mProfileSelector;
     private SharedPreferences mSharedPref;
-    private HashMap<String, ANSConfigInput> mANSConfigInputHashMap;
+    private HashMap<String, ONSConfigInput> mONSConfigInputHashMap;
 
-    private static final String TAG = "ANS";
+    private static final String TAG = "ONS";
     private static final String PREF_NAME = TAG;
     private static final String PREF_ENABLED = "isEnabled";
-    private static final String SERVICE_NAME = "ians";
+    private static final String SERVICE_NAME = "ions";
     private static final String CARRIER_APP_CONFIG_NAME = "carrierApp";
     private static final String SYSTEM_APP_CONFIG_NAME = "systemApp";
     private static final boolean DBG = true;
@@ -70,8 +66,8 @@ public class AlternativeNetworkService extends Service {
      * Profile selection callback. Will be called once Profile selector decides on
      * the opportunistic data profile.
      */
-    private ANSProfileSelector.ANSProfileSelectionCallback  mProfileSelectionCallback =
-            new ANSProfileSelector.ANSProfileSelectionCallback() {
+    private ONSProfileSelector.ONSProfileSelectionCallback  mProfileSelectionCallback =
+            new ONSProfileSelector.ONSProfileSelectionCallback() {
 
                 @Override
                 public void onProfileSelectionDone() {
@@ -95,12 +91,12 @@ public class AlternativeNetworkService extends Service {
                 mProfileSelector.getOpprotunisticSubInfo(subId), callingPackage);
     }
 
-    private final IAns.Stub mBinder = new IAns.Stub() {
+    private final IOns.Stub mBinder = new IOns.Stub() {
         /**
-         * Enable or disable Alternative Network service.
+         * Enable or disable Opportunistic Network service.
          *
          * This method should be called to enable or disable
-         * AlternativeNetwork service on the device.
+         * OpportunisticNetwork service on the device.
          *
          * <p>
          * Requires Permission:
@@ -119,7 +115,7 @@ public class AlternativeNetworkService extends Service {
 
             final long identity = Binder.clearCallingIdentity();
             try {
-                enableAlternativeNetwork(enable);
+                enableOpportunisticNetwork(enable);
             } finally {
                 Binder.restoreCallingIdentity(identity);
             }
@@ -128,9 +124,9 @@ public class AlternativeNetworkService extends Service {
         }
 
         /**
-         * is Alternative Network service enabled
+         * is Opportunistic Network service enabled
          *
-         * This method should be called to determine if the Alternative Network service
+         * This method should be called to determine if the Opportunistic Network service
          * is enabled
          *
          * <p>
@@ -161,14 +157,14 @@ public class AlternativeNetworkService extends Service {
          * @return true if request is accepted, else false.
          *
          */
-        public boolean setPreferredData(int subId, String callingPackage) {
-            logDebug("setPreferredData subId:" + subId + "callingPackage: " + callingPackage);
+        public boolean setPreferredDataSubscriptionId(int subId, String callingPackage) {
+            logDebug("setPreferredDataSubscriptionId subId:" + subId + "callingPackage: " + callingPackage);
             if (!enforceModifyPhoneStatePermission(mContext)) {
                 TelephonyPermissions.enforceCallingOrSelfCarrierPrivilege(
-                        mSubscriptionManager.getDefaultSubscriptionId(), "setPreferredData");
+                        mSubscriptionManager.getDefaultSubscriptionId(), "setPreferredDataSubscriptionId");
                 if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
                     TelephonyPermissions.enforceCallingOrSelfCarrierPrivilege(subId,
-                            "setPreferredData");
+                            "setPreferredDataSubscriptionId");
                 }
             }
             final long identity = Binder.clearCallingIdentity();
@@ -190,12 +186,12 @@ public class AlternativeNetworkService extends Service {
          * subscription id
          *
          */
-        public int getPreferredData(String callingPackage) {
+        public int getPreferredDataSubscriptionId(String callingPackage) {
             TelephonyPermissions.enforeceCallingOrSelfReadPhoneStatePermissionOrCarrierPrivilege(
-                    mContext, mSubscriptionManager.getDefaultSubscriptionId(), "getPreferredData");
+                    mContext, mSubscriptionManager.getDefaultSubscriptionId(), "getPreferredDataSubscriptionId");
             final long identity = Binder.clearCallingIdentity();
             try {
-                return mProfileSelector.getPreferedData();
+                return mProfileSelector.getPreferredDataSubscriptionId();
             } finally {
                 Binder.restoreCallingIdentity(identity);
             }
@@ -205,7 +201,7 @@ public class AlternativeNetworkService extends Service {
          * Update availability of a list of networks in the current location.
          *
          * This api should be called if the caller is aware of the availability of a network
-         * at the current location. This information will be used by AlternativeNetwork service
+         * at the current location. This information will be used by OpportunisticNetwork service
          * to decide to attach to the network. If an empty list is passed,
          * it is assumed that no network is available.
          *  @param availableNetworks is a list of available network information.
@@ -257,7 +253,7 @@ public class AlternativeNetworkService extends Service {
     }
 
     /**
-     * initialize ANS and register as service.
+     * initialize ONS and register as service.
      * Read persistent state to update enable state
      * Start sub components if already enabled.
      * @param context context instance
@@ -265,12 +261,12 @@ public class AlternativeNetworkService extends Service {
     private void initialize(Context context) {
         mContext = context;
         mTelephonyManager = TelephonyManager.from(mContext);
-        mProfileSelector = new ANSProfileSelector(mContext, mProfileSelectionCallback);
+        mProfileSelector = new ONSProfileSelector(mContext, mProfileSelectionCallback);
         mSharedPref = mContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         mSubscriptionManager = (SubscriptionManager) mContext.getSystemService(
                 Context.TELEPHONY_SUBSCRIPTION_SERVICE);
-        mANSConfigInputHashMap = new HashMap<String, ANSConfigInput>();
-        enableAlternativeNetwork(getPersistentEnableState());
+        mONSConfigInputHashMap = new HashMap<String, ONSConfigInput>();
+        enableOpportunisticNetwork(getPersistentEnableState());
     }
 
     private boolean handleCarrierAppAvailableNetworks(
@@ -297,11 +293,11 @@ public class AlternativeNetworkService extends Service {
             }
             final long identity = Binder.clearCallingIdentity();
             try {
-                ANSConfigInput ansConfigInput = new ANSConfigInput(availableNetworks);
-                ansConfigInput.setPrimarySub(
+                ONSConfigInput onsConfigInput = new ONSConfigInput(availableNetworks);
+                onsConfigInput.setPrimarySub(
                         mSubscriptionManager.getDefaultVoiceSubscriptionInfo().getSubscriptionId());
-                ansConfigInput.setPreferredDataSub(availableNetworks.get(0).getSubId());
-                mANSConfigInputHashMap.put(CARRIER_APP_CONFIG_NAME, ansConfigInput);
+                onsConfigInput.setPreferredDataSub(availableNetworks.get(0).getSubId());
+                mONSConfigInputHashMap.put(CARRIER_APP_CONFIG_NAME, onsConfigInput);
 
                 /* if carrier is reporting availability, then it takes higher priority. */
                 mProfileSelector.startProfileSelection(availableNetworks);
@@ -311,12 +307,12 @@ public class AlternativeNetworkService extends Service {
         } else {
             final long identity = Binder.clearCallingIdentity();
             try {
-                mANSConfigInputHashMap.put(CARRIER_APP_CONFIG_NAME, null);
+                mONSConfigInputHashMap.put(CARRIER_APP_CONFIG_NAME, null);
                 /* if carrier is reporting unavailability, then decide whether to start
                    system app request or not. */
-                if (mANSConfigInputHashMap.get(SYSTEM_APP_CONFIG_NAME) != null) {
+                if (mONSConfigInputHashMap.get(SYSTEM_APP_CONFIG_NAME) != null) {
                     mProfileSelector.startProfileSelection(
-                            mANSConfigInputHashMap.get(SYSTEM_APP_CONFIG_NAME)
+                            mONSConfigInputHashMap.get(SYSTEM_APP_CONFIG_NAME)
                                     .getAvailableNetworkInfos());
                 } else {
                     mProfileSelector.stopProfileSelection();
@@ -338,17 +334,17 @@ public class AlternativeNetworkService extends Service {
                     log("No opportunistic subscriptions received");
                     return false;
                 }
-                mANSConfigInputHashMap.put(SYSTEM_APP_CONFIG_NAME,
-                        new ANSConfigInput(availableNetworks));
+                mONSConfigInputHashMap.put(SYSTEM_APP_CONFIG_NAME,
+                        new ONSConfigInput(availableNetworks));
 
                 /* reporting availability. proceed if carrier app has not requested any */
-                if (mANSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME) == null) {
+                if (mONSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME) == null) {
                     mProfileSelector.startProfileSelection(availableNetworks);
                 }
             } else {
                 /* reporting unavailability */
-                mANSConfigInputHashMap.put(SYSTEM_APP_CONFIG_NAME, null);
-                if (mANSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME) == null) {
+                mONSConfigInputHashMap.put(SYSTEM_APP_CONFIG_NAME, null);
+                if (mONSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME) == null) {
                     mProfileSelector.stopProfileSelection();
                 }
             }
@@ -372,7 +368,7 @@ public class AlternativeNetworkService extends Service {
      * start profile selection if enabled.
      * @param enable enable(true) or disable(false)
      */
-    private void enableAlternativeNetwork(boolean enable) {
+    private void enableOpportunisticNetwork(boolean enable) {
         synchronized (mLock) {
             if (mIsEnabled != enable) {
                 updateEnableState(enable);

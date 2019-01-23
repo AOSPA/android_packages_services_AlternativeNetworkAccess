@@ -15,7 +15,7 @@
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 LOCAL_MODULE_TAGS := tests
-LOCAL_SRC_FILES := $(call all-java-files-under, src/com/android/ans/)
+LOCAL_SRC_FILES := $(call all-java-files-under, src/com/android/ons/)
 
 LOCAL_JAVA_LIBRARIES := android.test.runner \
                         telephony-common \
@@ -27,9 +27,9 @@ LOCAL_STATIC_JAVA_LIBRARIES := \
         mockito-target \
         platform-test-annotations
 
-LOCAL_PACKAGE_NAME := ANSTests
+LOCAL_PACKAGE_NAME := ONSTests
 LOCAL_PRIVATE_PLATFORM_APIS := true
 LOCAL_CERTIFICATE := platform
-LOCAL_INSTRUMENTATION_FOR := ANS
+LOCAL_INSTRUMENTATION_FOR := ONS
 LOCAL_COMPATIBILITY_SUITE := device-tests
 include $(BUILD_PACKAGE)

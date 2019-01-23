@@ -16,7 +16,7 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           xmlns:androidprv="http://schemas.android.com/apk/prv/res/android"
-          package="com.android.ans"
+          package="com.android.ons"
           coreApp="true"
           android:process="com.android.phone"
           android:sharedUserId="android.uid.phone">
@@ -26,13 +26,13 @@
         android:process="com.android.phone"
         android:persistent="true">
 
-        <receiver android:name="ANSAutoBoot">
+        <receiver android:name="ONSAutoBoot">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 
-        <service android:name=".AlternativeNetworkService"
+        <service android:name=".OpportunisticNetworkService"
                  android:enabled="true"
                  android:exported="true"/>
 

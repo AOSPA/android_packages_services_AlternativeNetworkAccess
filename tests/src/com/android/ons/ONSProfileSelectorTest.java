@@ -13,27 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License
  */
-package com.android.ans;
+package com.android.ons;
 
-import static org.junit.Assert.*;
 import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.*;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Handler;
-import android.os.HandlerThread;
 import android.os.Looper;
 import android.telephony.AvailableNetworkInfo;
 import android.telephony.CellIdentityLte;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoLte;
-import android.telephony.NetworkScan;
-import android.telephony.Rlog;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
-import android.telephony.TelephonyManager;
 
 import org.junit.After;
 import org.junit.Before;
@@ -44,31 +38,31 @@ import org.mockito.MockitoAnnotations;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ANSProfileSelectorTest extends ANSBaseTest {
-    private MyANSProfileSelector mANSProfileSelector;
+public class ONSProfileSelectorTest extends ONSBaseTest {
+    private MyONSProfileSelector mONSProfileSelector;
     private boolean testFailed;
     private boolean mCallbackInvoked;
     private int mDataSubId;
     @Mock
-    ANSNetworkScanCtlr mANSNetworkScanCtlr;
+    ONSNetworkScanCtlr mONSNetworkScanCtlr;
     private Looper mLooper;
-    private static final String TAG = "ANSProfileSelectorTest";
+    private static final String TAG = "ONSProfileSelectorTest";
 
-    MyANSProfileSelector.ANSProfileSelectionCallback mANSProfileSelectionCallback =
-            new MyANSProfileSelector.ANSProfileSelectionCallback() {
+    MyONSProfileSelector.ONSProfileSelectionCallback mONSProfileSelectionCallback =
+            new MyONSProfileSelector.ONSProfileSelectionCallback() {
         public void onProfileSelectionDone() {
             mCallbackInvoked = true;
             setReady(true);
         }
     };
 
-    public class MyANSProfileSelector extends ANSProfileSelector {
+    public class MyONSProfileSelector extends ONSProfileSelector {
         public SubscriptionManager.OnOpportunisticSubscriptionsChangedListener mProfileChngLstnrCpy;
         public BroadcastReceiver mProfileSelectorBroadcastReceiverCpy;
-        public ANSNetworkScanCtlr.NetworkAvailableCallBack mNetworkAvailableCallBackCpy;
+        public ONSNetworkScanCtlr.NetworkAvailableCallBack mNetworkAvailableCallBackCpy;
 
-        public MyANSProfileSelector(Context c,
-                MyANSProfileSelector.ANSProfileSelectionCallback aNSProfileSelectionCallback) {
+        public MyONSProfileSelector(Context c,
+                MyONSProfileSelector.ONSProfileSelectionCallback aNSProfileSelectionCallback) {
             super(c, aNSProfileSelectionCallback);
         }
 
@@ -81,19 +75,19 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
         }
 
         protected void init(Context c,
-                MyANSProfileSelector.ANSProfileSelectionCallback aNSProfileSelectionCallback) {
+                MyONSProfileSelector.ONSProfileSelectionCallback aNSProfileSelectionCallback) {
             super.init(c, aNSProfileSelectionCallback);
-            this.mSubscriptionManager = ANSProfileSelectorTest.this.mSubscriptionManager;
+            this.mSubscriptionManager = ONSProfileSelectorTest.this.mSubscriptionManager;
             mProfileChngLstnrCpy = mProfileChangeListener;
             mProfileSelectorBroadcastReceiverCpy = mProfileSelectorBroadcastReceiver;
             mNetworkAvailableCallBackCpy = mNetworkAvailableCallBack;
-            mNetworkScanCtlr = mANSNetworkScanCtlr;
+            mNetworkScanCtlr = mONSNetworkScanCtlr;
         }
     }
 
     @Before
     public void setUp() throws Exception {
-        super.setUp("ANSTest");
+        super.setUp("ONSTest");
         mLooper = null;
         MockitoAnnotations.initMocks(this);
     }
@@ -126,15 +120,15 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
             @Override
             public void run() {
                 Looper.prepare();
-                mANSProfileSelector = new MyANSProfileSelector(mContext,
-                        mANSProfileSelectionCallback);
+                mONSProfileSelector = new MyONSProfileSelector(mContext,
+                        mONSProfileSelectionCallback);
                 mLooper = Looper.myLooper();
                 setReady(true);
                 Looper.loop();
             }
         }).start();
 
-        doReturn(true).when(mANSNetworkScanCtlr).startFastNetworkScan(anyObject());
+        doReturn(true).when(mONSNetworkScanCtlr).startFastNetworkScan(anyObject());
         doReturn(null).when(mSubscriptionManager).getOpportunisticSubscriptions();
 
         // Wait till initialization is complete.
@@ -143,7 +137,7 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
 
         // Testing startProfileSelection without any oppotunistic data.
         // should not get any callback invocation.
-        mANSProfileSelector.startProfileSelection(availableNetworkInfos);
+        mONSProfileSelector.startProfileSelection(availableNetworkInfos);
         waitUntilReady(100);
         assertFalse(mCallbackInvoked);
     }
@@ -173,8 +167,8 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
             @Override
             public void run() {
                 Looper.prepare();
-                mANSProfileSelector = new MyANSProfileSelector(mContext,
-                        new MyANSProfileSelector.ANSProfileSelectionCallback() {
+                mONSProfileSelector = new MyONSProfileSelector(mContext,
+                        new MyONSProfileSelector.ONSProfileSelectionCallback() {
                     public void onProfileSelectionDone() {
                         setReady(true);
                     }
@@ -194,14 +188,14 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
 
         // Testing startProfileSelection with oppotunistic sub.
         // On success onProfileSelectionDone must get invoked.
-        mANSProfileSelector.startProfileSelection(availableNetworkInfos);
+        mONSProfileSelector.startProfileSelection(availableNetworkInfos);
         assertFalse(mReady);
-        mANSProfileSelector.mNetworkAvailableCallBackCpy.onNetworkAvailability(results2);
-        Intent callbackIntent = new Intent(MyANSProfileSelector.ACTION_SUB_SWITCH);
+        mONSProfileSelector.mNetworkAvailableCallBackCpy.onNetworkAvailability(results2);
+        Intent callbackIntent = new Intent(MyONSProfileSelector.ACTION_SUB_SWITCH);
         callbackIntent.putExtra("sequenceId", 1);
         callbackIntent.putExtra("subId", 5);
         assertFalse(mReady);
-        mANSProfileSelector.mProfileSelectorBroadcastReceiverCpy.onReceive(mContext,
+        mONSProfileSelector.mProfileSelectorBroadcastReceiverCpy.onReceive(mContext,
                 callbackIntent);
         waitUntilReady();
         assertTrue(mReady);
@@ -215,8 +209,8 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
             @Override
             public void run() {
                 Looper.prepare();
-                mANSProfileSelector = new MyANSProfileSelector(mContext,
-                        new MyANSProfileSelector.ANSProfileSelectionCallback() {
+                mONSProfileSelector = new MyONSProfileSelector(mContext,
+                        new MyONSProfileSelector.ONSProfileSelectionCallback() {
                             public void onProfileSelectionDone() {}
                         });
                 mLooper = Looper.myLooper();
@@ -230,7 +224,7 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
 
         // Testing selectProfileForData with no oppotunistic sub and the function should
         // return false.
-        boolean ret = mANSProfileSelector.selectProfileForData(1);
+        boolean ret = mONSProfileSelector.selectProfileForData(1);
         assertFalse(ret);
     }
 
@@ -246,8 +240,8 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
             @Override
             public void run() {
                 Looper.prepare();
-                mANSProfileSelector = new MyANSProfileSelector(mContext,
-                        new MyANSProfileSelector.ANSProfileSelectionCallback() {
+                mONSProfileSelector = new MyONSProfileSelector(mContext,
+                        new MyONSProfileSelector.ONSProfileSelectionCallback() {
                             public void onProfileSelectionDone() {}
                         });
                 mLooper = Looper.myLooper();
@@ -260,7 +254,7 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
         waitUntilReady();
 
         // Testing selectProfileForData with in active sub and the function should return false.
-        boolean ret = mANSProfileSelector.selectProfileForData(5);
+        boolean ret = mONSProfileSelector.selectProfileForData(5);
         assertFalse(ret);
     }
 
@@ -272,13 +266,13 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
         subscriptionInfoList.add(subscriptionInfo);
         mReady = false;
         doReturn(subscriptionInfoList).when(mSubscriptionManager).getOpportunisticSubscriptions();
-        doNothing().when(mSubscriptionManager).setPreferredData(anyInt());
+        doNothing().when(mSubscriptionManager).setPreferredDataSubscriptionId(anyInt());
         new Thread(new Runnable() {
             @Override
             public void run() {
                 Looper.prepare();
-                mANSProfileSelector = new MyANSProfileSelector(mContext,
-                        new MyANSProfileSelector.ANSProfileSelectionCallback() {
+                mONSProfileSelector = new MyONSProfileSelector(mContext,
+                        new MyONSProfileSelector.ONSProfileSelectionCallback() {
                             public void onProfileSelectionDone() {}
                         });
                 mLooper = Looper.myLooper();
@@ -292,7 +286,7 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
 
         // Testing selectProfileForData with INVALID_SUBSCRIPTION_ID and the function should
         // return true.
-        boolean ret = mANSProfileSelector.selectProfileForData(
+        boolean ret = mONSProfileSelector.selectProfileForData(
                 SubscriptionManager.INVALID_SUBSCRIPTION_ID);
         assertTrue(ret);
     }
@@ -306,18 +300,18 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
         mReady = false;
         doReturn(subscriptionInfoList).when(mSubscriptionManager)
                 .getActiveSubscriptionInfoList();
-        doNothing().when(mSubscriptionManager).setPreferredData(anyInt());
+        doNothing().when(mSubscriptionManager).setPreferredDataSubscriptionId(anyInt());
         new Thread(new Runnable() {
             @Override
             public void run() {
                 Looper.prepare();
                 doReturn(subscriptionInfoList).when(mSubscriptionManager)
                         .getOpportunisticSubscriptions();
-                mANSProfileSelector = new MyANSProfileSelector(mContext,
-                        new MyANSProfileSelector.ANSProfileSelectionCallback() {
+                mONSProfileSelector = new MyONSProfileSelector(mContext,
+                        new MyONSProfileSelector.ONSProfileSelectionCallback() {
                             public void onProfileSelectionDone() {}
                         });
-                mANSProfileSelector.updateOppSubs();
+                mONSProfileSelector.updateOppSubs();
                 mLooper = Looper.myLooper();
                 setReady(true);
                 Looper.loop();
@@ -329,7 +323,7 @@ public class ANSProfileSelectorTest extends ANSBaseTest {
 
         // Testing selectProfileForData with valid opportunistic sub and the function should
         // return true.
-        boolean ret = mANSProfileSelector.selectProfileForData(5);
+        boolean ret = mONSProfileSelector.selectProfileForData(5);
         assertTrue(ret);
     }
 }
