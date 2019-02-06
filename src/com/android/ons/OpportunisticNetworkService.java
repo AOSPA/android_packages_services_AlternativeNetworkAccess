@@ -17,15 +17,20 @@
 package com.android.ons;
 
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Binder;
+import android.os.Handler;
+import android.os.Message;
 import android.os.IBinder;
 import android.os.ServiceManager;
 import android.telephony.AvailableNetworkInfo;
 import android.telephony.Rlog;
+import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 
@@ -61,6 +66,8 @@ public class OpportunisticNetworkService extends Service {
     private static final String CARRIER_APP_CONFIG_NAME = "carrierApp";
     private static final String SYSTEM_APP_CONFIG_NAME = "systemApp";
     private static final boolean DBG = true;
+    /* message to indicate sim state update */
+    private static final int MSG_SIM_STATE_CHANGE = 1;
 
     /**
      * Profile selection callback. Will be called once Profile selector decides on
@@ -72,9 +79,32 @@ public class OpportunisticNetworkService extends Service {
                 @Override
                 public void onProfileSelectionDone() {
                     logDebug("profile selection done");
-                    mProfileSelector.stopProfileSelection();
                 }
             };
+
+    /** Broadcast receiver to get SIM card state changed event */
+    private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            mHandler.sendEmptyMessage(MSG_SIM_STATE_CHANGE);
+        }
+    };
+
+    private Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case MSG_SIM_STATE_CHANGE:
+                    synchronized (mLock) {
+                        handleSimStateChange();
+                    }
+                    break;
+                default:
+                    log("invalid message");
+                    break;
+            }
+        }
+    };
 
     private static boolean enforceModifyPhoneStatePermission(Context context) {
         if (context.checkCallingOrSelfPermission(android.Manifest.permission.MODIFY_PHONE_STATE)
@@ -83,6 +113,32 @@ public class OpportunisticNetworkService extends Service {
         }
 
         return false;
+    }
+
+    private void handleSimStateChange() {
+        logDebug("SIM state changed");
+        ONSConfigInput onsConfigInput = mONSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME);
+        if (onsConfigInput == null) {
+            return;
+        }
+        List<SubscriptionInfo> subscriptionInfos =
+            mSubscriptionManager.getActiveSubscriptionInfoList();
+        for (SubscriptionInfo subscriptionInfo : subscriptionInfos) {
+            if (subscriptionInfo.getSubscriptionId() == onsConfigInput.getPrimarySub()) {
+                return;
+            }
+        }
+
+        logDebug("Carrier subscription is not available, removing entry");
+        mONSConfigInputHashMap.put(CARRIER_APP_CONFIG_NAME, null);
+        if (mONSConfigInputHashMap.get(SYSTEM_APP_CONFIG_NAME) != null) {
+            mProfileSelector.startProfileSelection(
+                mONSConfigInputHashMap.get(SYSTEM_APP_CONFIG_NAME)
+                    .getAvailableNetworkInfos());
+        } else {
+            mProfileSelector.stopProfileSelection();
+        }
+        return;
     }
 
     private boolean hasOpportunisticSubPrivilege(String callingPackage, int subId) {
@@ -216,6 +272,7 @@ public class OpportunisticNetworkService extends Service {
          */
         public boolean updateAvailableNetworks(List<AvailableNetworkInfo> availableNetworks,
                 String callingPackage) {
+            logDebug("updateAvailableNetworks: " + availableNetworks);
             /* check if system app */
             if (enforceModifyPhoneStatePermission(mContext)) {
                 return handleSystemAppAvailableNetworks(
@@ -266,6 +323,8 @@ public class OpportunisticNetworkService extends Service {
         mSubscriptionManager = (SubscriptionManager) mContext.getSystemService(
                 Context.TELEPHONY_SUBSCRIPTION_SERVICE);
         mONSConfigInputHashMap = new HashMap<String, ONSConfigInput>();
+        mContext.registerReceiver(mBroadcastReceiver,
+            new IntentFilter(TelephonyIntents.ACTION_SIM_STATE_CHANGED));
         enableOpportunisticNetwork(getPersistentEnableState());
     }
 

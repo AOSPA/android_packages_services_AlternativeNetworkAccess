@@ -18,6 +18,7 @@ package com.android.ons;
 
 import android.content.Context;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Message;
 import android.os.PersistableBundle;
 import android.telephony.AccessNetworkConstants;
@@ -68,30 +69,8 @@ public class ONSNetworkScanCtlr {
     private int mRssnrEntryThreshold;
     @VisibleForTesting
     protected NetworkAvailableCallBack mNetworkAvailableCallBack;
-
-    private Handler mHandler =  new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            switch (msg.what) {
-                case MSG_SCAN_RESULTS_AVAILABLE:
-                    logDebug("Msg received for scan results");
-                    /* Todo: need to aggregate the results */
-                    analyzeScanResults((List<CellInfo>) msg.obj);
-                    break;
-                case MSG_SCAN_COMPLETE:
-                    logDebug("Msg received for scan complete");
-                    restartScan();
-                    break;
-                case MSG_SCAN_ERROR:
-                    logDebug("Msg received for scan error");
-                    invalidateScanOnError((int) msg.obj);
-                    break;
-                default:
-                    log("invalid message");
-                    break;
-            }
-        }
-    };
+    HandlerThread mThread;
+    private Handler mHandler;
 
     @VisibleForTesting
     public TelephonyScanManager.NetworkScanCallback mNetworkScanCallback =
@@ -210,6 +189,31 @@ public class ONSNetworkScanCtlr {
     public void init(Context context, TelephonyManager telephonyManager,
             NetworkAvailableCallBack networkAvailableCallBack) {
         log("init called");
+        mThread = new HandlerThread(LOG_TAG);
+        mThread.start();
+        mHandler =  new Handler(mThread.getLooper()) {
+            @Override
+            public void handleMessage(Message msg) {
+                switch (msg.what) {
+                    case MSG_SCAN_RESULTS_AVAILABLE:
+                        logDebug("Msg received for scan results");
+                        /* Todo: need to aggregate the results */
+                        analyzeScanResults((List<CellInfo>) msg.obj);
+                        break;
+                    case MSG_SCAN_COMPLETE:
+                        logDebug("Msg received for scan complete");
+                        restartScan();
+                        break;
+                    case MSG_SCAN_ERROR:
+                        logDebug("Msg received for scan error");
+                        invalidateScanOnError((int) msg.obj);
+                        break;
+                    default:
+                        log("invalid message");
+                        break;
+                }
+            }
+        };
         mTelephonyManager = telephonyManager;
         mNetworkAvailableCallBack = networkAvailableCallBack;
         configManager = (CarrierConfigManager) context.getSystemService(
