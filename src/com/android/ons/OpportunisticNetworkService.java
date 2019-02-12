@@ -187,15 +187,16 @@ public class OpportunisticNetworkService extends Service {
          *
          * <p>
          * Requires Permission:
-         *   {@link android.Manifest.permission#READ_PHONE_STATE READ_PHONE_STATE}
+         *   {@link android.Manifest.permission#READ_PRIVILEGED_PHONE_STATE}
          * Or the calling app has carrier privileges. @see #hasCarrierPrivileges
          *
          * @param callingPackage caller's package name
          */
         @Override
         public boolean isEnabled(String callingPackage) {
-            TelephonyPermissions.enforeceCallingOrSelfReadPhoneStatePermissionOrCarrierPrivilege(
-                    mContext, mSubscriptionManager.getDefaultSubscriptionId(), "isEnabled");
+            TelephonyPermissions
+                    .enforeceCallingOrSelfReadPrivilegedPhoneStatePermissionOrCarrierPrivilege(
+                            mContext, mSubscriptionManager.getDefaultSubscriptionId(), "isEnabled");
             return mIsEnabled;
         }
 
@@ -235,16 +236,19 @@ public class OpportunisticNetworkService extends Service {
          * Get preferred default data sub Id
          *
          * <p>Requires that the calling app has carrier privileges
-         * (see {@link #hasCarrierPrivileges}),or has permission
-         * {@link android.Manifest.permission#READ_PHONE_STATE READ_PHONE_STATE}.
+         * (see {@link #hasCarrierPrivileges}),or has either
+         * {@link android.Manifest.permission#READ_PRIVILEGED_PHONE_STATE} or.
+         * {@link android.Manifest.permission#READ_PHONE_STATE} permission.
          * @return subId preferred opportunistic subscription id or
          * {@link SubscriptionManager#DEFAULT_SUBSCRIPTION_ID} if there are no preferred
          * subscription id
          *
          */
         public int getPreferredDataSubscriptionId(String callingPackage) {
-            TelephonyPermissions.enforeceCallingOrSelfReadPhoneStatePermissionOrCarrierPrivilege(
-                    mContext, mSubscriptionManager.getDefaultSubscriptionId(), "getPreferredDataSubscriptionId");
+            TelephonyPermissions
+                    .checkCallingOrSelfReadPhoneState(mContext,
+                            mSubscriptionManager.getDefaultSubscriptionId(),
+                            callingPackage, "getPreferredDataSubscriptionId");
             final long identity = Binder.clearCallingIdentity();
             try {
                 return mProfileSelector.getPreferredDataSubscriptionId();

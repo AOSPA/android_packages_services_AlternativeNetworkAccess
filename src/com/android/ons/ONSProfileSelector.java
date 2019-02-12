@@ -403,6 +403,9 @@ public class ONSProfileSelector {
                 /* if subscription is not active, activate the sub */
                 if (!mSubscriptionManager.isActiveSubId(filteredAvailableNetworks.get(0).getSubId())) {
                     switchToSubscription(filteredAvailableNetworks.get(0).getSubId());
+                } else {
+                    enableModem(filteredAvailableNetworks.get(0).getSubId(), true);
+                    mProfileSelectionCallback.onProfileSelectionDone();
                 }
             } else {
                 /* start scan immediately */
