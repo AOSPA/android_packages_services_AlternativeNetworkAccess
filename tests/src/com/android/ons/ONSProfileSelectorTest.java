@@ -266,7 +266,8 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         subscriptionInfoList.add(subscriptionInfo);
         mReady = false;
         doReturn(subscriptionInfoList).when(mSubscriptionManager).getOpportunisticSubscriptions();
-        doNothing().when(mSubscriptionManager).setPreferredDataSubscriptionId(anyInt());
+        doNothing().when(mSubscriptionManager).setPreferredDataSubscriptionId(
+                anyInt(), anyBoolean(), any(), any());
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -300,7 +301,8 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         mReady = false;
         doReturn(subscriptionInfoList).when(mSubscriptionManager)
                 .getActiveSubscriptionInfoList();
-        doNothing().when(mSubscriptionManager).setPreferredDataSubscriptionId(anyInt());
+        doNothing().when(mSubscriptionManager).setPreferredDataSubscriptionId(
+                anyInt(), anyBoolean(), any(), any());
         new Thread(new Runnable() {
             @Override
             public void run() {

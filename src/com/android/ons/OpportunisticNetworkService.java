@@ -122,7 +122,7 @@ public class OpportunisticNetworkService extends Service {
             return;
         }
         List<SubscriptionInfo> subscriptionInfos =
-            mSubscriptionManager.getActiveSubscriptionInfoList();
+            mSubscriptionManager.getActiveSubscriptionInfoList(false);
         for (SubscriptionInfo subscriptionInfo : subscriptionInfos) {
             if (subscriptionInfo.getSubscriptionId() == onsConfigInput.getPrimarySub()) {
                 return;
