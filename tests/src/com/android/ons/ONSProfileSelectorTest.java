@@ -224,8 +224,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
 
         // Testing selectProfileForData with no oppotunistic sub and the function should
         // return false.
-        boolean ret = mONSProfileSelector.selectProfileForData(1);
-        assertFalse(ret);
+        mONSProfileSelector.selectProfileForData(1, false, null);
     }
 
     @Test
@@ -254,8 +253,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         waitUntilReady();
 
         // Testing selectProfileForData with in active sub and the function should return false.
-        boolean ret = mONSProfileSelector.selectProfileForData(5);
-        assertFalse(ret);
+        mONSProfileSelector.selectProfileForData(5, false, null);
     }
 
     @Test
@@ -287,9 +285,8 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
 
         // Testing selectProfileForData with INVALID_SUBSCRIPTION_ID and the function should
         // return true.
-        boolean ret = mONSProfileSelector.selectProfileForData(
-                SubscriptionManager.INVALID_SUBSCRIPTION_ID);
-        assertTrue(ret);
+        mONSProfileSelector.selectProfileForData(
+                SubscriptionManager.INVALID_SUBSCRIPTION_ID, false, null);
     }
 
     @Test
@@ -325,7 +322,6 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
 
         // Testing selectProfileForData with valid opportunistic sub and the function should
         // return true.
-        boolean ret = mONSProfileSelector.selectProfileForData(5);
-        assertTrue(ret);
+        mONSProfileSelector.selectProfileForData(5, false, null);
     }
 }

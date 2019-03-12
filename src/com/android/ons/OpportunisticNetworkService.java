@@ -36,6 +36,7 @@ import android.telephony.TelephonyManager;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.telephony.IOns;
+import com.android.internal.telephony.ISetOpportunisticDataCallback;
 import com.android.internal.telephony.TelephonyIntents;
 import com.android.internal.telephony.TelephonyPermissions;
 
@@ -210,11 +211,13 @@ public class OpportunisticNetworkService extends Service {
          * @param subId which opportunistic subscription
          * {@link SubscriptionManager#getOpportunisticSubscriptions} is preferred for cellular data.
          * Pass {@link SubscriptionManager#DEFAULT_SUBSCRIPTION_ID} to unset the preference
+         * @param needValidation whether validation is needed before switch happens.
+         * @param callback callback upon request completion.
          * @param callingPackage caller's package name
-         * @return true if request is accepted, else false.
          *
          */
-        public boolean setPreferredDataSubscriptionId(int subId, String callingPackage) {
+        public void setPreferredDataSubscriptionId(int subId, boolean needValidation,
+                ISetOpportunisticDataCallback callbackStub, String callingPackage) {
             logDebug("setPreferredDataSubscriptionId subId:" + subId + "callingPackage: " + callingPackage);
             if (!enforceModifyPhoneStatePermission(mContext)) {
                 TelephonyPermissions.enforceCallingOrSelfCarrierPrivilege(
@@ -226,7 +229,7 @@ public class OpportunisticNetworkService extends Service {
             }
             final long identity = Binder.clearCallingIdentity();
             try {
-                return mProfileSelector.selectProfileForData(subId);
+                mProfileSelector.selectProfileForData(subId, needValidation, callbackStub);
             } finally {
                 Binder.restoreCallingIdentity(identity);
             }

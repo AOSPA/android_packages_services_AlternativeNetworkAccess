@@ -28,6 +28,8 @@ import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
+import android.os.RemoteException;
+import android.os.ServiceManager;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoLte;
 import android.telephony.Rlog;
@@ -39,6 +41,8 @@ import android.text.TextUtils;
 import android.telephony.AvailableNetworkInfo;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.telephony.ISetOpportunisticDataCallback;
+import com.android.internal.telephony.ISub;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -320,12 +324,6 @@ public class ONSProfileSelector {
         mSubscriptionManager.switchToSubscription(subId, replyIntent);
     }
 
-    private void switchPreferredData(int subId) {
-        mSubscriptionManager.setPreferredDataSubscriptionId(
-                subId, true, (command) -> {}, null);
-        mCurrentDataSubId = subId;
-    }
-
     private void onSubSwitchComplete(int subId) {
         enableModem(subId, true);
         mProfileSelectionCallback.onProfileSelectionDone();
@@ -526,21 +524,45 @@ public class ONSProfileSelector {
         message.sendToTarget();
     }
 
+    private void sendSetOpptCallbackHelper(ISetOpportunisticDataCallback callback, int result) {
+        if (callback == null) return;
+        try {
+            callback.onComplete(result);
+        } catch (RemoteException exception) {
+            log("RemoteException " + exception);
+        }
+    }
+
     /**
      * select opportunistic profile for data if passing a valid subId.
      * @param subId : opportunistic subId or SubscriptionManager.DEFAULT_SUBSCRIPTION_ID if
      *              deselecting previously set preference.
      */
-    public boolean selectProfileForData(int subId) {
+    public void selectProfileForData(int subId, boolean needValidation,
+            ISetOpportunisticDataCallback callbackStub) {
         if ((subId == SubscriptionManager.DEFAULT_SUBSCRIPTION_ID)
                 || (isOpprotunisticSub(subId) && isActiveSub(subId))) {
-            mSubscriptionManager.setPreferredDataSubscriptionId(
-                    subId, true, (command) -> {}, null);
+            ISub iSub = ISub.Stub.asInterface(ServiceManager.getService("isub"));
+            if (iSub == null) {
+                log("Could not get Subscription Service handle");
+                sendSetOpptCallbackHelper(callbackStub,
+                    TelephonyManager.SET_OPPORTUNISTIC_SUB_VALIDATION_FAILED);
+                return;
+            }
+            try {
+                iSub.setPreferredDataSubscriptionId(subId, needValidation, callbackStub);
+            } catch (RemoteException ex) {
+                log("Could not connect to Subscription Service");
+                sendSetOpptCallbackHelper(callbackStub,
+                        TelephonyManager.SET_OPPORTUNISTIC_SUB_VALIDATION_FAILED);
+                return;
+            }
             mCurrentDataSubId = subId;
-            return true;
+            sendSetOpptCallbackHelper(callbackStub, TelephonyManager.SET_OPPORTUNISTIC_SUB_SUCCESS);
         } else {
             log("Inactive sub passed for preferred data " + subId);
-            return false;
+            sendSetOpptCallbackHelper(callbackStub,
+                    TelephonyManager.SET_OPPORTUNISTIC_SUB_INVALID_PARAMETER);
         }
     }
 
