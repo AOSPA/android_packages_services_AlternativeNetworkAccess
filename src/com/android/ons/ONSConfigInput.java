@@ -19,6 +19,8 @@ package com.android.ons;
 import android.telephony.AvailableNetworkInfo;
 import android.telephony.SubscriptionManager;
 
+import com.android.internal.telephony.IUpdateAvailableNetworksCallback;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,11 +35,18 @@ public class ONSConfigInput {
     private ArrayList<AvailableNetworkInfo> mAvailableNetworkInfos;
     private int mPreferredDataSub;
     private int mPrimarySub;
+    private IUpdateAvailableNetworksCallback mAvailableNetworkCallback;
 
-    ONSConfigInput(ArrayList<AvailableNetworkInfo> availableNetworkInfos) {
+    ONSConfigInput(ArrayList<AvailableNetworkInfo> availableNetworkInfos,
+            IUpdateAvailableNetworksCallback callback) {
         mAvailableNetworkInfos = availableNetworkInfos;
         mPreferredDataSub = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
         mPrimarySub = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+        mAvailableNetworkCallback = callback;
+    }
+
+    public IUpdateAvailableNetworksCallback getAvailableNetworkCallback() {
+        return mAvailableNetworkCallback;
     }
 
     public void setAvailableNetworkInfo(ArrayList<AvailableNetworkInfo> availableNetworkInfos) {

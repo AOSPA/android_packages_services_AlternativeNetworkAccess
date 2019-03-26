@@ -67,7 +67,8 @@ public class ONSNetworkScanCtlrTest extends ONSBaseTest {
     public void testStartFastNetworkScan() {
         ArrayList<String> mccMncs = new ArrayList<>();
         mccMncs.add("310210");
-        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs);
+        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs,
+                new ArrayList<Integer>());
         ArrayList<AvailableNetworkInfo> availableNetworkInfos = new ArrayList<AvailableNetworkInfo>();
         availableNetworkInfos.add(availableNetworkInfo);
         List<CellInfo> expectedResults = new ArrayList<CellInfo>();
@@ -121,7 +122,8 @@ public class ONSNetworkScanCtlrTest extends ONSBaseTest {
         expectedResults.add((CellInfo)cellInfoLte);
         ArrayList<String> mccMncs = new ArrayList<>();
         mccMncs.add("310210");
-        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs);
+        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs,
+                new ArrayList<Integer>());
         ArrayList<AvailableNetworkInfo> availableNetworkInfos = new ArrayList<AvailableNetworkInfo>();
         availableNetworkInfos.add(availableNetworkInfo);
         mReady = false;
@@ -174,7 +176,8 @@ public class ONSNetworkScanCtlrTest extends ONSBaseTest {
         ArrayList<String> mccMncs = new ArrayList<>();
         mccMncs.add("310210");
         mccMncs.add("310211");
-        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs);
+        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs,
+            new ArrayList<Integer>());
         ArrayList<AvailableNetworkInfo> availableNetworkInfos = new ArrayList<AvailableNetworkInfo>();
         availableNetworkInfos.add(availableNetworkInfo);
         mReady = false;
@@ -224,7 +227,8 @@ public class ONSNetworkScanCtlrTest extends ONSBaseTest {
         expectedResults.add((CellInfo)cellInfoLte);
         ArrayList<String> mccMncs = new ArrayList<>();
         mccMncs.add("310210");
-        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs);
+        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs,
+                new ArrayList<Integer>());
         ArrayList<AvailableNetworkInfo> availableNetworkInfos = new ArrayList<AvailableNetworkInfo>();
         availableNetworkInfos.add(availableNetworkInfo);
         mCallbackInvoked = false;
