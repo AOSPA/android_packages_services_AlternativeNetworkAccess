@@ -30,6 +30,7 @@ import android.os.HandlerThread;
 import android.os.Message;
 import android.os.RemoteException;
 import android.os.ServiceManager;
+import android.telephony.AvailableNetworkInfo;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoLte;
 import android.telephony.Rlog;
@@ -38,19 +39,18 @@ import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
-import android.telephony.AvailableNetworkInfo;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.telephony.ISetOpportunisticDataCallback;
 import com.android.internal.telephony.ISub;
 import com.android.internal.telephony.IUpdateAvailableNetworksCallback;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.ArrayList;
 
 /**
  * Profile selector class which will select the right profile based upon
@@ -69,6 +69,9 @@ public class ONSProfileSelector {
 
     /* message to indicate start of profile selection process */
     private static final int MSG_START_PROFILE_SELECTION = 2;
+
+    /* message to indicate Subscription switch completion */
+    private static final int MSG_SUB_SWITCH_COMPLETE = 3;
 
     private boolean mIsEnabled = false;
 
@@ -98,39 +101,6 @@ public class ONSProfileSelector {
     HandlerThread mThread;
     @VisibleForTesting
     protected Handler mHandler;
-
-    /**
-     * Broadcast receiver to receive intents
-     */
-    @VisibleForTesting
-    protected final BroadcastReceiver mProfileSelectorBroadcastReceiver =
-            new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    int sequenceId;
-                    int subId;
-                    String action = intent.getAction();
-                    logDebug("ACTION_SUB_SWITCH : " + action);
-                    if (!mIsEnabled || action == null) {
-                        return;
-                    }
-
-                    switch (action) {
-                        case ACTION_SUB_SWITCH:
-                            sequenceId = intent.getIntExtra("sequenceId",  INVALID_SEQUENCE_ID);
-                            subId = intent.getIntExtra("subId",
-                                    SubscriptionManager.INVALID_SUBSCRIPTION_ID);
-                            logDebug("ACTION_SUB_SWITCH sequenceId: " + sequenceId
-                                    + " mSequenceId: " + mSequenceId);
-                            if (sequenceId != mSequenceId) {
-                                return;
-                            }
-
-                            onSubSwitchComplete(subId);
-                            break;
-                    }
-                }
-            };
 
     /**
      * Network scan callback handler
@@ -331,14 +301,29 @@ public class ONSProfileSelector {
 
     private void switchToSubscription(int subId) {
         Intent callbackIntent = new Intent(ACTION_SUB_SWITCH);
-        callbackIntent.setClass(mContext, ONSProfileSelector.class);
-        callbackIntent.putExtra("sequenceId", getAndUpdateToken());
+        callbackIntent.setClass(mContext, OpportunisticNetworkService.class);
+        updateToken();
+        callbackIntent.putExtra("sequenceId", mSequenceId);
         callbackIntent.putExtra("subId", subId);
 
         PendingIntent replyIntent = PendingIntent.getService(mContext,
                 1, callbackIntent,
                 Intent.FILL_IN_ACTION);
         mSubscriptionManager.switchToSubscription(subId, replyIntent);
+    }
+
+    void onSubSwitchComplete(Intent intent) {
+        int sequenceId = intent.getIntExtra("sequenceId",  INVALID_SEQUENCE_ID);
+        int subId = intent.getIntExtra("subId",
+                SubscriptionManager.INVALID_SUBSCRIPTION_ID);
+        logDebug("ACTION_SUB_SWITCH sequenceId: " + sequenceId
+                + " mSequenceId: " + mSequenceId);
+        if (sequenceId != mSequenceId) {
+            return;
+        }
+
+        Message message = Message.obtain(mHandler, MSG_SUB_SWITCH_COMPLETE, subId);
+        message.sendToTarget();
     }
 
     private void onSubSwitchComplete(int subId) {
@@ -348,9 +333,9 @@ public class ONSProfileSelector {
                 TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SUCCESS);
     }
 
-    private int getAndUpdateToken() {
+    private void updateToken() {
         synchronized (mLock) {
-            return mSequenceId++;
+            mSequenceId++;
         }
     }
 
@@ -396,7 +381,10 @@ public class ONSProfileSelector {
 
     private void sendUpdateNetworksCallbackHelper(IUpdateAvailableNetworksCallback callback,
             int result) {
-        if (callback == null) return;
+        if (callback == null) {
+            log("callback is null");
+            return;
+        }
         try {
             callback.onComplete(result);
         } catch (RemoteException exception) {
@@ -411,6 +399,8 @@ public class ONSProfileSelector {
                 (IUpdateAvailableNetworksCallback) objects[1];
         if (mOppSubscriptionInfos == null) {
             logDebug("null subscription infos");
+            sendUpdateNetworksCallbackHelper(callbackStub,
+                    TelephonyManager.UPDATE_AVAILABLE_NETWORKS_INVALID_ARGUMENTS);
             return;
         }
         if (isSame(availableNetworks, mAvailableNetworkInfos)) {
@@ -580,7 +570,7 @@ public class ONSProfileSelector {
     public void selectProfileForData(int subId, boolean needValidation,
             ISetOpportunisticDataCallback callbackStub) {
         if ((subId == SubscriptionManager.DEFAULT_SUBSCRIPTION_ID)
-                || (isOpprotunisticSub(subId) && isActiveSub(subId))) {
+                || (isOpprotunisticSub(subId) && mSubscriptionManager.isActiveSubId(subId))) {
             ISub iSub = ISub.Stub.asInterface(ServiceManager.getService("isub"));
             if (iSub == null) {
                 log("Could not get Subscription Service handle");
@@ -665,6 +655,12 @@ public class ONSProfileSelector {
                             checkProfileUpdate((Object[]) msg.obj);
                         }
                         break;
+                    case MSG_SUB_SWITCH_COMPLETE:
+                        logDebug("Msg received for sub switch");
+                        synchronized (mLock) {
+                            onSubSwitchComplete((int) msg.obj);
+                        }
+                        break;
                     default:
                         log("invalid message");
                         break;
@@ -674,9 +670,6 @@ public class ONSProfileSelector {
         /* register for profile update events */
         mSubscriptionManager.addOnOpportunisticSubscriptionsChangedListener(
                 AsyncTask.SERIAL_EXECUTOR, mProfileChangeListener);
-        /* register for subscription switch intent */
-        mContext.registerReceiver(mProfileSelectorBroadcastReceiver,
-                new IntentFilter(ACTION_SUB_SWITCH));
     }
 
     private void log(String msg) {

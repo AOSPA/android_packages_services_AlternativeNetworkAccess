@@ -15,7 +15,6 @@
  */
 package com.android.ons;
 
-import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.*;
 
 import android.content.BroadcastReceiver;
@@ -28,6 +27,10 @@ import android.telephony.CellInfo;
 import android.telephony.CellInfoLte;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
+import android.telephony.TelephonyManager;
+import android.util.Log;
+
+import com.android.internal.telephony.IUpdateAvailableNetworksCallback;
 
 import org.junit.After;
 import org.junit.Before;
@@ -43,6 +46,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
     private boolean testFailed;
     private boolean mCallbackInvoked;
     private int mDataSubId;
+    private int mResult;
     @Mock
     ONSNetworkScanCtlr mONSNetworkScanCtlr;
     private Looper mLooper;
@@ -79,7 +83,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
             super.init(c, aNSProfileSelectionCallback);
             this.mSubscriptionManager = ONSProfileSelectorTest.this.mSubscriptionManager;
             mProfileChngLstnrCpy = mProfileChangeListener;
-            mProfileSelectorBroadcastReceiverCpy = mProfileSelectorBroadcastReceiver;
+            mProfileSelectorBroadcastReceiverCpy = null;
             mNetworkAvailableCallBackCpy = mNetworkAvailableCallBack;
             mNetworkScanCtlr = mONSNetworkScanCtlr;
         }
@@ -101,6 +105,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         }
     }
 
+
     @Test
     public void testStartProfileSelectionWithNoOpportunisticSub() {
         List<CellInfo> results2 = new ArrayList<CellInfo>();
@@ -115,22 +120,32 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         ArrayList<AvailableNetworkInfo> availableNetworkInfos = new ArrayList<AvailableNetworkInfo>();
         availableNetworkInfos.add(availableNetworkInfo);
 
+        IUpdateAvailableNetworksCallback mCallback = new IUpdateAvailableNetworksCallback.Stub() {
+            @Override
+            public void onComplete(int result) {
+                Log.d(TAG, "mResult end:" + result);
+                mResult = result;
+            }
+        };
+
+        mResult = -1;
         mReady = false;
         mCallbackInvoked = false;
         new Thread(new Runnable() {
             @Override
             public void run() {
                 Looper.prepare();
+                doReturn(true).when(mONSNetworkScanCtlr).startFastNetworkScan(anyObject());
+                doReturn(null).when(mSubscriptionManager).getOpportunisticSubscriptions();
                 mONSProfileSelector = new MyONSProfileSelector(mContext,
                         mONSProfileSelectionCallback);
+                mONSProfileSelector.updateOppSubs();
+                mONSProfileSelector.startProfileSelection(availableNetworkInfos, mCallback);
                 mLooper = Looper.myLooper();
                 setReady(true);
                 Looper.loop();
             }
         }).start();
-
-        doReturn(true).when(mONSNetworkScanCtlr).startFastNetworkScan(anyObject());
-        doReturn(null).when(mSubscriptionManager).getOpportunisticSubscriptions();
 
         // Wait till initialization is complete.
         waitUntilReady();
@@ -138,10 +153,11 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
 
         // Testing startProfileSelection without any oppotunistic data.
         // should not get any callback invocation.
-        mONSProfileSelector.startProfileSelection(availableNetworkInfos, null);
         waitUntilReady(100);
+        assertEquals(TelephonyManager.UPDATE_AVAILABLE_NETWORKS_INVALID_ARGUMENTS, mResult);
         assertFalse(mCallbackInvoked);
     }
+
 
     @Test
     public void testStartProfileSelectionSuccess() {
@@ -164,24 +180,34 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         ArrayList<AvailableNetworkInfo> availableNetworkInfos = new ArrayList<AvailableNetworkInfo>();
         availableNetworkInfos.add(availableNetworkInfo);
 
+        IUpdateAvailableNetworksCallback mCallback = new IUpdateAvailableNetworksCallback.Stub() {
+            @Override
+            public void onComplete(int result) {
+                mResult = result;
+            }
+        };
+
+        mResult = -1;
         mReady = false;
         new Thread(new Runnable() {
             @Override
             public void run() {
                 Looper.prepare();
+                doReturn(subscriptionInfoList).when(mSubscriptionManager).getOpportunisticSubscriptions();
+                doReturn(true).when(mSubscriptionManager).isActiveSubId(anyInt());
                 mONSProfileSelector = new MyONSProfileSelector(mContext,
                         new MyONSProfileSelector.ONSProfileSelectionCallback() {
                     public void onProfileSelectionDone() {
                         setReady(true);
                     }
                 });
+                mONSProfileSelector.updateOppSubs();
+                mONSProfileSelector.startProfileSelection(availableNetworkInfos, mCallback);
                 mLooper = Looper.myLooper();
                 setReady(true);
                 Looper.loop();
             }
         }).start();
-
-        doReturn(subscriptionInfoList).when(mSubscriptionManager).getOpportunisticSubscriptions();
 
         // Wait till initialization is complete.
         waitUntilReady();
@@ -190,17 +216,26 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
 
         // Testing startProfileSelection with oppotunistic sub.
         // On success onProfileSelectionDone must get invoked.
-        mONSProfileSelector.startProfileSelection(availableNetworkInfos, null);
         assertFalse(mReady);
+        waitForMs(500);
         mONSProfileSelector.mNetworkAvailableCallBackCpy.onNetworkAvailability(results2);
         Intent callbackIntent = new Intent(MyONSProfileSelector.ACTION_SUB_SWITCH);
         callbackIntent.putExtra("sequenceId", 1);
         callbackIntent.putExtra("subId", 5);
-        assertFalse(mReady);
+        //assertFalse(mReady);
         mONSProfileSelector.mProfileSelectorBroadcastReceiverCpy.onReceive(mContext,
                 callbackIntent);
         waitUntilReady();
+        assertEquals(TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SUCCESS, mResult);
         assertTrue(mReady);
+    }
+
+    public static void waitForMs(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Log.d(TAG, "InterruptedException while waiting: " + e);
+        }
     }
 
     @Test
