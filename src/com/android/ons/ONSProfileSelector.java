@@ -407,7 +407,7 @@ public class ONSProfileSelector {
             return;
         }
 
-        stopProfileSelection();
+        stopProfileScanningPrecedure();
         mIsEnabled = true;
         mAvailableNetworkInfos = availableNetworks;
         /* sort in the order of priority */
@@ -500,9 +500,28 @@ public class ONSProfileSelector {
     }
 
     private void enableModem(int subId, boolean enable) {
-        if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
-            int phoneId = SubscriptionManager.getPhoneId(subId);
-            mSubscriptionBoundTelephonyManager.enableModemForSlot(phoneId, enable);
+        if (subId == SubscriptionManager.INVALID_SUBSCRIPTION_ID) {
+            return;
+        }
+
+        int phoneId = SubscriptionManager.getPhoneId(subId);
+        if (mSubscriptionBoundTelephonyManager.isModemEnabledForSlot(phoneId) == enable) {
+            return;
+        }
+
+        mSubscriptionBoundTelephonyManager.enableModemForSlot(phoneId, enable);
+    }
+
+    private void stopProfileScanningPrecedure() {
+        if (mNetworkScanCallback != null) {
+            sendUpdateNetworksCallbackHelper(mNetworkScanCallback,
+                    TelephonyManager.UPDATE_AVAILABLE_NETWORKS_ABORTED);
+            mNetworkScanCallback = null;
+        }
+        mNetworkScanCtlr.stopNetworkScan();
+        synchronized (mLock) {
+            mAvailableNetworkInfos = null;
+            mIsEnabled = false;
         }
     }
 
@@ -603,18 +622,9 @@ public class ONSProfileSelector {
      * stop profile selection procedure
      */
     public void stopProfileSelection() {
-        if (mNetworkScanCallback != null) {
-            sendUpdateNetworksCallbackHelper(mNetworkScanCallback,
-                    TelephonyManager.UPDATE_AVAILABLE_NETWORKS_ABORTED);
-            mNetworkScanCallback = null;
-        }
+        stopProfileScanningPrecedure();
         logDebug("stopProfileSelection");
-        mNetworkScanCtlr.stopNetworkScan();
         disableOpportunisticModem();
-        synchronized (mLock) {
-            mAvailableNetworkInfos = null;
-            mIsEnabled = false;
-        }
     }
 
     @VisibleForTesting
