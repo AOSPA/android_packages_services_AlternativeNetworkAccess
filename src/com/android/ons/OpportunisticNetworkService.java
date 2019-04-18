@@ -143,12 +143,9 @@ public class OpportunisticNetworkService extends Service {
                     mONSConfigInputHashMap.get(
                             SYSTEM_APP_CONFIG_NAME).getAvailableNetworkCallback());
         } else {
-            mProfileSelector.stopProfileSelection();
-            sendUpdateNetworksCallbackHelper(mONSConfigInputHashMap.get(
-                    SYSTEM_APP_CONFIG_NAME).getAvailableNetworkCallback(),
-                    TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SUCCESS);
+            mProfileSelector.stopProfileSelection(mONSConfigInputHashMap.get(
+                    SYSTEM_APP_CONFIG_NAME).getAvailableNetworkCallback());
         }
-        return;
     }
 
     private boolean hasOpportunisticSubPrivilege(String callingPackage, int subId) {
@@ -432,9 +429,7 @@ public class OpportunisticNetworkService extends Service {
                             mONSConfigInputHashMap.get(
                                     SYSTEM_APP_CONFIG_NAME).getAvailableNetworkCallback());
                 } else {
-                    mProfileSelector.stopProfileSelection();
-                    sendUpdateNetworksCallbackHelper(callbackStub,
-                            TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SUCCESS);
+                    mProfileSelector.stopProfileSelection(callbackStub);
                 }
             } finally {
                 Binder.restoreCallingIdentity(identity);
@@ -481,10 +476,8 @@ public class OpportunisticNetworkService extends Service {
                 /* reporting unavailability */
                 mONSConfigInputHashMap.put(SYSTEM_APP_CONFIG_NAME, null);
                 if (mONSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME) == null) {
-                    mProfileSelector.stopProfileSelection();
+                    mProfileSelector.stopProfileSelection(callbackStub);
                 }
-                sendUpdateNetworksCallbackHelper(callbackStub,
-                        TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SUCCESS);
             }
         } finally {
             Binder.restoreCallingIdentity(identity);
@@ -510,7 +503,7 @@ public class OpportunisticNetworkService extends Service {
             if (mIsEnabled != enable) {
                 updateEnableState(enable);
                 if (!mIsEnabled) {
-                    mProfileSelector.stopProfileSelection();
+                    mProfileSelector.stopProfileSelection(null);
                 } else {
                     if (mONSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME) != null &&
                         mONSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME)
