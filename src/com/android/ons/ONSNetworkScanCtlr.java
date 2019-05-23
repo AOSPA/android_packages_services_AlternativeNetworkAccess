@@ -33,11 +33,13 @@ import android.telephony.Rlog;
 import android.telephony.SubscriptionInfo;
 import android.telephony.TelephonyManager;
 import android.telephony.TelephonyScanManager;
+import android.util.ArraySet;
 
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -231,17 +233,18 @@ public class ONSNetworkScanCtlr {
     private NetworkScanRequest createNetworkScanRequest(ArrayList<AvailableNetworkInfo> availableNetworks,
             int periodicity) {
         RadioAccessSpecifier[] ras = new RadioAccessSpecifier[1];
-        int[] bands = new int[1];
-
-        /* hardcoding band for now, Todo b/113753823 */
-        bands[0] = AccessNetworkConstants.EutranBand.BAND_48;
-
         ArrayList<String> mccMncs = new ArrayList<String>();
-        /* retrieve mcc mncs for a subscription id */
+        Set<Integer> bandSet = new ArraySet<>();
+
+        /* by default add band 48 */
+        bandSet.add(AccessNetworkConstants.EutranBand.BAND_48);
+        /* retrieve mcc mncs and bands for available networks */
         for (AvailableNetworkInfo availableNetwork : availableNetworks) {
             mccMncs.addAll(availableNetwork.getMccMncs());
+            bandSet.addAll(availableNetwork.getBands());
         }
 
+        int[] bands = bandSet.stream().mapToInt(band->band).toArray();
         /* create network scan request */
         ras[0] = new RadioAccessSpecifier(AccessNetworkConstants.AccessNetworkType.EUTRAN, bands,
                 null);

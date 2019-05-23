@@ -383,17 +383,23 @@ public class OpportunisticNetworkService extends Service {
                         TelephonyManager.UPDATE_AVAILABLE_NETWORKS_INVALID_ARGUMENTS);
                 return;
             }
-            TelephonyPermissions.enforceCallingOrSelfCarrierPrivilege(
-                    availableNetworks.get(0).getSubId(), "updateAvailableNetworks");
 
-            /* check if the app has opportunistic carrier permission */
-            if (!hasOpportunisticSubPrivilege(callingPackage,
-                    availableNetworks.get(0).getSubId())) {
-                log("No carrier privelege for opportunistic subscription");
-                sendUpdateNetworksCallbackHelper(callbackStub,
-                        TelephonyManager.UPDATE_AVAILABLE_NETWORKS_NO_CARRIER_PRIVILEGE);
-                return;
+            for (AvailableNetworkInfo availableNetworkInfo : availableNetworks) {
+                if (mSubscriptionManager.isActiveSubId(availableNetworkInfo.getSubId())) {
+                    TelephonyPermissions.enforceCallingOrSelfCarrierPrivilege(
+                        availableNetworkInfo.getSubId(), "updateAvailableNetworks");
+                } else {
+                    /* check if the app has opportunistic carrier permission */
+                    if (!hasOpportunisticSubPrivilege(callingPackage,
+                        availableNetworkInfo.getSubId())) {
+                        log("No carrier privilege for opportunistic subscription");
+                        sendUpdateNetworksCallbackHelper(callbackStub,
+                            TelephonyManager.UPDATE_AVAILABLE_NETWORKS_NO_CARRIER_PRIVILEGE);
+                        return;
+                    }
+                }
             }
+
             final long identity = Binder.clearCallingIdentity();
             try {
                 ONSConfigInput onsConfigInput = new ONSConfigInput(availableNetworks, callbackStub);
