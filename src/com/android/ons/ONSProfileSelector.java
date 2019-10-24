@@ -74,6 +74,9 @@ public class ONSProfileSelector {
     /* message to indicate Subscription switch completion */
     private static final int MSG_SUB_SWITCH_COMPLETE = 3;
 
+    /* message to stop profile selection process */
+    private static final int MSG_STOP_PROFILE_SELECTION = 4;
+
     private boolean mIsEnabled = false;
 
     @VisibleForTesting
@@ -623,6 +626,12 @@ public class ONSProfileSelector {
         return mSubscriptionBoundTelephonyManager.enableModemForSlot(phoneId, enable);
     }
 
+    private void stopProfileSelectionProcess(IUpdateAvailableNetworksCallback callbackStub) {
+        stopProfileScanningPrecedure();
+        logDebug("stopProfileSelection");
+        disableOpportunisticModem(callbackStub);
+    }
+
     private void stopProfileScanningPrecedure() {
         synchronized (mLock) {
             if (mNetworkScanCallback != null) {
@@ -733,9 +742,9 @@ public class ONSProfileSelector {
      * stop profile selection procedure
      */
     public void stopProfileSelection(IUpdateAvailableNetworksCallback callbackStub) {
-        stopProfileScanningPrecedure();
         logDebug("stopProfileSelection");
-        disableOpportunisticModem(callbackStub);
+        Message message = Message.obtain(mHandler, MSG_STOP_PROFILE_SELECTION, callbackStub);
+        message.sendToTarget();
     }
 
     @VisibleForTesting
@@ -797,6 +806,12 @@ public class ONSProfileSelector {
                         logDebug("Msg received for profile update");
                         synchronized (mLock) {
                             checkProfileUpdate((Object[]) msg.obj);
+                        }
+                        break;
+                    case MSG_STOP_PROFILE_SELECTION:
+                        logDebug("Msg received to stop profile selection");
+                        synchronized (mLock) {
+                            stopProfileSelectionProcess((IUpdateAvailableNetworksCallback) msg.obj);
                         }
                         break;
                     case MSG_SUB_SWITCH_COMPLETE:
