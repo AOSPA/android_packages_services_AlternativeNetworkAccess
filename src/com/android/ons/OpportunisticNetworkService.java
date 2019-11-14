@@ -127,6 +127,11 @@ public class OpportunisticNetworkService extends Service {
         }
         List<SubscriptionInfo> subscriptionInfos =
             mSubscriptionManager.getActiveSubscriptionInfoList(false);
+        if (subscriptionInfos == null) {
+          return;
+        }
+
+        logDebug("handleSimStateChange: subscriptionInfos - " + subscriptionInfos);
         for (SubscriptionInfo subscriptionInfo : subscriptionInfos) {
             if (subscriptionInfo.getSubscriptionId() == carrierAppConfigInput.getPrimarySub()) {
                 return;
@@ -393,9 +398,15 @@ public class OpportunisticNetworkService extends Service {
             }
 
             for (AvailableNetworkInfo availableNetworkInfo : availableNetworks) {
-                if (Binder.withCleanCallingIdentity(
-                            () -> mSubscriptionManager.isActiveSubId(
-                                    availableNetworkInfo.getSubId()))) {
+                final long identity = Binder.clearCallingIdentity();
+                boolean isActiveSubId = false;
+                try {
+                    isActiveSubId =
+                            mSubscriptionManager.isActiveSubId(availableNetworkInfo.getSubId());
+                } finally {
+                    Binder.restoreCallingIdentity(identity);
+                }
+                if (isActiveSubId) {
                     TelephonyPermissions.enforceCallingOrSelfCarrierPrivilege(
                         availableNetworkInfo.getSubId(), "updateAvailableNetworks");
                 } else {
@@ -413,10 +424,12 @@ public class OpportunisticNetworkService extends Service {
             final long identity = Binder.clearCallingIdentity();
             try {
                 ONSConfigInput onsConfigInput = new ONSConfigInput(availableNetworks, callbackStub);
-                onsConfigInput.setPrimarySub(
-                        mSubscriptionManager.getDefaultVoiceSubscriptionInfo().getSubscriptionId());
-                onsConfigInput.setPreferredDataSub(availableNetworks.get(0).getSubId());
-                mONSConfigInputHashMap.put(CARRIER_APP_CONFIG_NAME, onsConfigInput);
+                SubscriptionInfo subscriptionInfo = mSubscriptionManager.getDefaultVoiceSubscriptionInfo();
+                if (subscriptionInfo != null) {
+                    onsConfigInput.setPrimarySub(subscriptionInfo.getSubscriptionId());
+                    onsConfigInput.setPreferredDataSub(availableNetworks.get(0).getSubId());
+                    mONSConfigInputHashMap.put(CARRIER_APP_CONFIG_NAME, onsConfigInput);
+                }
 
                 if (mIsEnabled) {
                     /*  if carrier is reporting availability, then it takes higher priority. */
