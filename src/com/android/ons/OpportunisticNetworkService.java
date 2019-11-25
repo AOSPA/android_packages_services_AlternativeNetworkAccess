@@ -264,11 +264,13 @@ public class OpportunisticNetworkService extends Service {
          * subscription id
          *
          */
-        public int getPreferredDataSubscriptionId(String callingPackage) {
+        @Override
+        public int getPreferredDataSubscriptionId(String callingPackage,
+                String callingFeatureId) {
             TelephonyPermissions
                     .checkCallingOrSelfReadPhoneState(mContext,
                             mSubscriptionManager.getDefaultSubscriptionId(),
-                            callingPackage, "getPreferredDataSubscriptionId");
+                            callingPackage, callingFeatureId, "getPreferredDataSubscriptionId");
             final long identity = Binder.clearCallingIdentity();
             try {
                 return mProfileSelector.getPreferredDataSubscriptionId();

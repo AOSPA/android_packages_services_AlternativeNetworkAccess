@@ -50,6 +50,7 @@ import androidx.test.runner.AndroidJUnit4;
 public class OpportunisticNetworkServiceTest extends ONSBaseTest {
     private static final String TAG = "ONSTest";
     private String pkgForDebug;
+    private String pkgForFeature;
     private int mResult;
     private IOns iOpportunisticNetworkService;
     private Looper mLooper;
@@ -64,6 +65,7 @@ public class OpportunisticNetworkServiceTest extends ONSBaseTest {
     public void setUp() throws Exception {
         super.setUp("ONSTest");
         pkgForDebug = mContext != null ? mContext.getOpPackageName() : "<unknown>";
+        pkgForFeature = mContext != null ? mContext.getFeatureId() : null;
         Intent intent = new Intent(mContext, OpportunisticNetworkService.class);
         new Thread(new Runnable() {
             @Override
@@ -225,7 +227,8 @@ public class OpportunisticNetworkServiceTest extends ONSBaseTest {
         assertNotNull(iOpportunisticNetworkService);
         mResult = -1;
         try {
-            mResult = iOpportunisticNetworkService.getPreferredDataSubscriptionId(pkgForDebug);
+            mResult = iOpportunisticNetworkService.getPreferredDataSubscriptionId(pkgForDebug,
+                    pkgForFeature);
             Log.d(TAG, "testGetPreferredDataSubscriptionId: " + mResult);
             assertNotNull(mResult);
         } catch (RemoteException ex) {
