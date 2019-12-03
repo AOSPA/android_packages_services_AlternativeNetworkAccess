@@ -161,7 +161,8 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         // Testing startProfileSelection without any oppotunistic data.
         // should not get any callback invocation.
         waitUntilReady(100);
-        assertEquals(TelephonyManager.UPDATE_AVAILABLE_NETWORKS_INVALID_ARGUMENTS, mResult);
+        assertEquals(
+                TelephonyManager.UPDATE_AVAILABLE_NETWORKS_NO_OPPORTUNISTIC_SUB_AVAILABLE, mResult);
         assertFalse(mCallbackInvoked);
     }
 

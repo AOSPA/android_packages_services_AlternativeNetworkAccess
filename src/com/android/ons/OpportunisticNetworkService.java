@@ -388,14 +388,14 @@ public class OpportunisticNetworkService extends Service {
             if (availableNetworks.size() > 1) {
                 log("Carrier app should not pass more than one subscription");
                 sendUpdateNetworksCallbackHelper(callbackStub,
-                        TelephonyManager.UPDATE_AVAILABLE_NETWORKS_INVALID_ARGUMENTS);
+                        TelephonyManager.UPDATE_AVAILABLE_NETWORKS_MULTIPLE_NETWORKS_NOT_SUPPORTED);
                 return;
             }
 
             if (!mProfileSelector.hasOpprotunisticSub(availableNetworks)) {
                 log("No opportunistic subscriptions received");
                 sendUpdateNetworksCallbackHelper(callbackStub,
-                        TelephonyManager.UPDATE_AVAILABLE_NETWORKS_INVALID_ARGUMENTS);
+                        TelephonyManager.UPDATE_AVAILABLE_NETWORKS_NO_OPPORTUNISTIC_SUB_AVAILABLE);
                 return;
             }
 
@@ -436,6 +436,9 @@ public class OpportunisticNetworkService extends Service {
                 if (mIsEnabled) {
                     /*  if carrier is reporting availability, then it takes higher priority. */
                     mProfileSelector.startProfileSelection(availableNetworks, callbackStub);
+                } else {
+                    sendUpdateNetworksCallbackHelper(callbackStub,
+                            TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SERVICE_IS_DISABLED);
                 }
             } finally {
                 Binder.restoreCallingIdentity(identity);
@@ -496,15 +499,21 @@ public class OpportunisticNetworkService extends Service {
                 if (!mProfileSelector.hasOpprotunisticSub(availableNetworks)) {
                     log("No opportunistic subscriptions received");
                     sendUpdateNetworksCallbackHelper(callbackStub,
-                            TelephonyManager.UPDATE_AVAILABLE_NETWORKS_INVALID_ARGUMENTS);
+                            TelephonyManager
+                                    .UPDATE_AVAILABLE_NETWORKS_NO_OPPORTUNISTIC_SUB_AVAILABLE);
                     return;
                 }
                 mONSConfigInputHashMap.put(SYSTEM_APP_CONFIG_NAME,
                         new ONSConfigInput(availableNetworks, callbackStub));
 
                 /* reporting availability. proceed if carrier app has not requested any */
-                if (mIsEnabled && mONSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME) == null) {
-                    mProfileSelector.startProfileSelection(availableNetworks, callbackStub);
+                if (mIsEnabled) {
+                    if (mONSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME) == null) {
+                        mProfileSelector.startProfileSelection(availableNetworks, callbackStub);
+                    }
+                } else {
+                    sendUpdateNetworksCallbackHelper(callbackStub,
+                            TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SERVICE_IS_DISABLED);
                 }
             } else {
                 if (!mIsEnabled) {

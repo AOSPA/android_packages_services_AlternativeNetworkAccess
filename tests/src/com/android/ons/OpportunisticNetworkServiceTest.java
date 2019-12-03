@@ -219,7 +219,8 @@ public class OpportunisticNetworkServiceTest extends ONSBaseTest {
         } catch (RemoteException ex) {
             Log.e(TAG, "RemoteException", ex);
         }
-        assertEquals(TelephonyManager.SET_OPPORTUNISTIC_SUB_INACTIVE_SUBSCRIPTION, mResult);
+        assertEquals(
+                TelephonyManager.SET_OPPORTUNISTIC_SUB_NO_OPPORTUNISTIC_SUB_AVAILABLE, mResult);
     }
 
     @Test
@@ -260,7 +261,8 @@ public class OpportunisticNetworkServiceTest extends ONSBaseTest {
         } catch (RemoteException ex) {
             Log.e(TAG, "RemoteException", ex);
         }
-        assertEquals(TelephonyManager.UPDATE_AVAILABLE_NETWORKS_INVALID_ARGUMENTS, mResult);
+        assertEquals(
+                TelephonyManager.UPDATE_AVAILABLE_NETWORKS_NO_OPPORTUNISTIC_SUB_AVAILABLE, mResult);
     }
 
     @Test
