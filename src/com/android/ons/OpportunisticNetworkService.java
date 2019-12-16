@@ -52,15 +52,15 @@ import java.util.List;
  * Use the same to provide user opportunistic data in areas with corresponding networks
  */
 public class OpportunisticNetworkService extends Service {
-    private Context mContext;
+    @VisibleForTesting protected Context mContext;
     private TelephonyManager mTelephonyManager;
-    private SubscriptionManager mSubscriptionManager;
+    @VisibleForTesting protected SubscriptionManager mSubscriptionManager;
 
     private final Object mLock = new Object();
-    private boolean mIsEnabled;
+    @VisibleForTesting protected boolean mIsEnabled;
     private ONSProfileSelector mProfileSelector;
     private SharedPreferences mSharedPref;
-    private HashMap<String, ONSConfigInput> mONSConfigInputHashMap;
+    @VisibleForTesting protected HashMap<String, ONSConfigInput> mONSConfigInputHashMap;
 
     private static final String TAG = "ONS";
     private static final String PREF_NAME = TAG;
@@ -118,16 +118,17 @@ public class OpportunisticNetworkService extends Service {
         return false;
     }
 
-    private void handleSimStateChange() {
+    @VisibleForTesting
+    protected void handleSimStateChange() {
         logDebug("SIM state changed");
-        ONSConfigInput onsConfigInput = mONSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME);
-        if (onsConfigInput == null) {
+        ONSConfigInput carrierAppConfigInput = mONSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME);
+        if (carrierAppConfigInput == null) {
             return;
         }
         List<SubscriptionInfo> subscriptionInfos =
             mSubscriptionManager.getActiveSubscriptionInfoList(false);
         for (SubscriptionInfo subscriptionInfo : subscriptionInfos) {
-            if (subscriptionInfo.getSubscriptionId() == onsConfigInput.getPrimarySub()) {
+            if (subscriptionInfo.getSubscriptionId() == carrierAppConfigInput.getPrimarySub()) {
                 return;
             }
         }
@@ -142,9 +143,6 @@ public class OpportunisticNetworkService extends Service {
                     mONSConfigInputHashMap.get(SYSTEM_APP_CONFIG_NAME).getAvailableNetworkInfos(),
                     mONSConfigInputHashMap.get(
                             SYSTEM_APP_CONFIG_NAME).getAvailableNetworkCallback());
-        } else {
-            mProfileSelector.stopProfileSelection(mONSConfigInputHashMap.get(
-                    SYSTEM_APP_CONFIG_NAME).getAvailableNetworkCallback());
         }
     }
 
@@ -232,7 +230,15 @@ public class OpportunisticNetworkService extends Service {
                     TelephonyPermissions.enforceCallingOrSelfCarrierPrivilege(subId,
                             "setPreferredDataSubscriptionId");
                 }
+            } else {
+                if (mONSConfigInputHashMap.get(CARRIER_APP_CONFIG_NAME) != null) {
+                    sendSetOpptCallbackHelper(callbackStub,
+                        TelephonyManager.SET_OPPORTUNISTIC_SUB_VALIDATION_FAILED);
+                    return;
+                }
             }
+
+
             final long identity = Binder.clearCallingIdentity();
             try {
                 mProfileSelector.selectProfileForData(subId, needValidation, callbackStub);
@@ -352,11 +358,13 @@ public class OpportunisticNetworkService extends Service {
      * Start sub components if already enabled.
      * @param context context instance
      */
-    private void initialize(Context context) {
+    @VisibleForTesting
+    protected void initialize(Context context) {
         mContext = context;
         mTelephonyManager = TelephonyManager.from(mContext);
         mProfileSelector = new ONSProfileSelector(mContext, mProfileSelectionCallback);
-        mSharedPref = mContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        mSharedPref = mContext.createDeviceProtectedStorageContext().getSharedPreferences(
+                PREF_NAME, Context.MODE_PRIVATE);
         mSubscriptionManager = (SubscriptionManager) mContext.getSystemService(
                 Context.TELEPHONY_SUBSCRIPTION_SERVICE);
         mONSConfigInputHashMap = new HashMap<String, ONSConfigInput>();
@@ -385,7 +393,9 @@ public class OpportunisticNetworkService extends Service {
             }
 
             for (AvailableNetworkInfo availableNetworkInfo : availableNetworks) {
-                if (mSubscriptionManager.isActiveSubId(availableNetworkInfo.getSubId())) {
+                if (Binder.withCleanCallingIdentity(
+                            () -> mSubscriptionManager.isActiveSubId(
+                                    availableNetworkInfo.getSubId()))) {
                     TelephonyPermissions.enforceCallingOrSelfCarrierPrivilege(
                         availableNetworkInfo.getSubId(), "updateAvailableNetworks");
                 } else {
@@ -444,6 +454,15 @@ public class OpportunisticNetworkService extends Service {
     }
 
     private void sendUpdateNetworksCallbackHelper(IUpdateAvailableNetworksCallback callback, int result) {
+        if (callback == null) return;
+        try {
+            callback.onComplete(result);
+        } catch (RemoteException exception) {
+            log("RemoteException " + exception);
+        }
+    }
+
+    private void sendSetOpptCallbackHelper(ISetOpportunisticDataCallback callback, int result) {
         if (callback == null) return;
         try {
             callback.onComplete(result);
