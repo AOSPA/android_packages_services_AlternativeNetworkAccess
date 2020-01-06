@@ -174,7 +174,6 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         assertFalse(mCallbackInvoked);
     }
 
-
     @Test
     public void testStartProfileSelectionSuccess() {
         List<SubscriptionInfo> subscriptionInfoList = new ArrayList<SubscriptionInfo>();
@@ -244,6 +243,81 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         waitUntilReady();
         assertEquals(TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SUCCESS, mResult);
         assertTrue(mReady);
+    }
+
+    @Test
+    public void testStartProfileSelectionWithDifferentPrioritySubInfo() {
+        int PRIORITY_HIGH = 1;
+        int PRIORITY_MED = 2;
+
+        List<SubscriptionInfo> subscriptionInfoList = new ArrayList<SubscriptionInfo>();
+        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
+                "123", 1, null, "310", "210", "", false, null, "1");
+        subscriptionInfoList.add(subscriptionInfo);
+        SubscriptionInfo subscriptionInfo_2 = new SubscriptionInfo(8, "", 1, "Vzw", "Vzw", 1, 1,
+                "123", 1, null, "311", "480", "", false, null, "1");
+        subscriptionInfoList.add(subscriptionInfo_2);
+
+        List<CellInfo> results2 = new ArrayList<CellInfo>();
+        CellIdentityLte cellIdentityLte = new CellIdentityLte(310, 210, 1, 1, 1);
+        CellInfoLte cellInfoLte = new CellInfoLte();
+        cellInfoLte.setCellIdentity(cellIdentityLte);
+        results2.add((CellInfo) cellInfoLte);
+        CellIdentityLte cellIdentityLte_2 = new CellIdentityLte(311, 480, 1, 1, 1);
+        CellInfoLte cellInfoLte_2 = new CellInfoLte();
+        cellInfoLte_2.setCellIdentity(cellIdentityLte_2);
+        results2.add((CellInfo) cellInfoLte_2);
+
+        ArrayList<String> mccMncs = new ArrayList<>();
+        mccMncs.add("310210");
+        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(5, PRIORITY_MED,
+                mccMncs, new ArrayList<Integer>());
+        ArrayList<AvailableNetworkInfo> availableNetworkInfos = new ArrayList<>();
+        availableNetworkInfos.add(availableNetworkInfo);
+        ArrayList<String> mccMncs_2 = new ArrayList<>();
+        mccMncs_2.add("311480");
+        AvailableNetworkInfo availableNetworkInfo_2 = new AvailableNetworkInfo(8, PRIORITY_HIGH,
+                mccMncs_2, new ArrayList<Integer>());
+        availableNetworkInfos.add(availableNetworkInfo_2);
+
+        IUpdateAvailableNetworksCallback mCallback = new IUpdateAvailableNetworksCallback.Stub() {
+            @Override
+            public void onComplete(int result) {
+                mResult = result;
+            }
+        };
+
+        mResult = -1;
+        mReady = false;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Looper.prepare();
+                doReturn(subscriptionInfoList).when(mSubscriptionManager)
+                        .getOpportunisticSubscriptions();
+                doReturn(true).when(mSubscriptionManager).isActiveSubId(anyInt());
+                doReturn(true).when(mSubscriptionBoundTelephonyManager).enableModemForSlot(
+                        anyInt(), anyBoolean());
+                mONSProfileSelector = new MyONSProfileSelector(mContext,
+                        new MyONSProfileSelector.ONSProfileSelectionCallback() {
+                            public void onProfileSelectionDone() {
+                                setReady(true);
+                            }
+                        });
+                mONSProfileSelector.updateOppSubs();
+                mONSProfileSelector.startProfileSelection(availableNetworkInfos, mCallback);
+                mLooper = Looper.myLooper();
+                setReady(true);
+                Looper.loop();
+            }
+        }).start();
+        waitUntilReady();
+        waitForMs(500);
+        // get high priority subId
+        int retrieveSubId = mONSProfileSelector.retrieveBestSubscription(results2);
+        mONSProfileSelector.mNetworkAvailableCallBackCpy.onNetworkAvailability(results2);
+        assertEquals(8, retrieveSubId);
+        assertEquals(TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SUCCESS, mResult);
     }
 
     @Test
@@ -648,5 +722,4 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         waitForMs(500);
         assertEquals(mONSProfileSelector.getCurrentPreferredData(), 5);
     }
-
 }

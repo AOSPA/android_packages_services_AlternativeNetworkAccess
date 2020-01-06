@@ -60,6 +60,8 @@ public class OpportunisticNetworkServiceTest extends ONSBaseTest {
 
     @Mock
     private HashMap<String, ONSConfigInput> mockONSConfigInputHashMap;
+    @Mock
+    private ONSProfileSelector mockProfileSelector;
 
     @Before
     public void setUp() throws Exception {
@@ -284,6 +286,76 @@ public class OpportunisticNetworkServiceTest extends ONSBaseTest {
             Log.e(TAG, "RemoteException", ex);
         }
         assertEquals(TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SUCCESS, mResult);
+    }
+
+    @Test
+    public void testPriorityRuleOfActivatingAvailableNetworks() {
+        ArrayList<String> mccMncs = new ArrayList<>();
+        mccMncs.add("310210");
+        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs,
+                new ArrayList<Integer>());
+        ArrayList<AvailableNetworkInfo> availableNetworkInfos =
+                new ArrayList<AvailableNetworkInfo>();
+        availableNetworkInfos.add(availableNetworkInfo);
+        mResult = -1;
+        IUpdateAvailableNetworksCallback mCallback = new IUpdateAvailableNetworksCallback.Stub() {
+            @Override
+            public void onComplete(int result) {
+                mResult = result;
+                Log.d(TAG, "result: " + result);
+            }
+        };
+        ONSConfigInput onsConfigInput = new ONSConfigInput(availableNetworkInfos, mCallback);
+        onsConfigInput.setPrimarySub(1);
+        onsConfigInput.setPreferredDataSub(availableNetworkInfos.get(0).getSubId());
+        doReturn(onsConfigInput).when(mockONSConfigInputHashMap).get(CARRIER_APP_CONFIG_NAME);
+        doReturn(true).when(mockProfileSelector).hasOpprotunisticSub(any());
+        doReturn(false).when(mockProfileSelector).containStandaloneOppSubs(any());
+        mOpportunisticNetworkService.mIsEnabled = true;
+        mOpportunisticNetworkService.mONSConfigInputHashMap = mockONSConfigInputHashMap;
+        mOpportunisticNetworkService.mProfileSelector = mockProfileSelector;
+
+        // Assume carrier app has updated available networks at first.
+        // Then system app updated available networks which is not standalone.
+        try {
+            IOns onsBinder = (IOns) mOpportunisticNetworkService.onBind(null);
+            onsBinder.updateAvailableNetworks(availableNetworkInfos, mCallback, pkgForDebug);
+        } catch (RemoteException ex) {
+            Log.e(TAG, "RemoteException", ex);
+        }
+        verify(mockProfileSelector, never()).startProfileSelection(any(), any());
+
+        // System app updated available networks which contain standalone network.
+        doReturn(true).when(mockProfileSelector).containStandaloneOppSubs(any());
+        try {
+            IOns onsBinder = (IOns) mOpportunisticNetworkService.onBind(null);
+            onsBinder.updateAvailableNetworks(availableNetworkInfos, mCallback, pkgForDebug);
+        } catch (RemoteException ex) {
+            Log.e(TAG, "RemoteException", ex);
+        }
+        verify(mockProfileSelector, times(1)).startProfileSelection(any(), any());
+
+        // System app updated available networks which equal to null.
+        // Case1: start carrier app request, if there is a carrier app request.
+        availableNetworkInfos.clear();
+        try {
+            IOns onsBinder = (IOns) mOpportunisticNetworkService.onBind(null);
+            onsBinder.updateAvailableNetworks(availableNetworkInfos, mCallback, pkgForDebug);
+        } catch (RemoteException ex) {
+            Log.e(TAG, "RemoteException", ex);
+        }
+        verify(mockProfileSelector, times(2)).startProfileSelection(any(), any());
+
+        // System app updated available networks which equal to null.
+        // Case2: stop profile selection, if there is no any carrier app request.
+        doReturn(null).when(mockONSConfigInputHashMap).get(CARRIER_APP_CONFIG_NAME);
+        try {
+            IOns onsBinder = (IOns) mOpportunisticNetworkService.onBind(null);
+            onsBinder.updateAvailableNetworks(availableNetworkInfos, mCallback, pkgForDebug);
+        } catch (RemoteException ex) {
+            Log.e(TAG, "RemoteException", ex);
+        }
+        verify(mockProfileSelector, times(1)).stopProfileSelection(any());
     }
 
     private IOns getIOns() {
