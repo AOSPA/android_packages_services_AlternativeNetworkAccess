@@ -97,7 +97,8 @@ public class ONSProfileSelector {
     private ONSProfileSelectionCallback mProfileSelectionCallback;
     private int mSequenceId;
     private int mSubId;
-    private int mCurrentDataSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+    @VisibleForTesting
+    protected int mCurrentDataSubId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
     private ArrayList<AvailableNetworkInfo> mAvailableNetworkInfos;
     private IUpdateAvailableNetworksCallback mNetworkScanCallback;
 
@@ -622,6 +623,12 @@ public class ONSProfileSelector {
             return false;
         }
 
+        // If disabling modem for opportunistic sub, make sure to switch data back to default sub.
+        if (!enable) {
+            if (mSubscriptionManager.getPreferredDataSubscriptionId() == subId) {
+                selectProfileForData(SubscriptionManager.DEFAULT_SUBSCRIPTION_ID, false, null);
+            }
+        }
         int phoneId = SubscriptionManager.getPhoneId(subId);
         /*  Todo: b/135067156
          *  Reenable this code once 135067156 is fixed
