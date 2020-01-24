@@ -20,7 +20,9 @@ import static org.mockito.Mockito.*;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.os.IBinder;
 import android.os.Looper;
+import android.os.ServiceManager;
 import android.telephony.AvailableNetworkInfo;
 import android.telephony.CellIdentityLte;
 import android.telephony.CellInfo;
@@ -30,6 +32,7 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
+import com.android.internal.telephony.ISub;
 import com.android.internal.telephony.IUpdateAvailableNetworksCallback;
 
 import org.junit.After;
@@ -38,8 +41,10 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class ONSProfileSelectorTest extends ONSBaseTest {
 
@@ -52,6 +57,12 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
     ONSNetworkScanCtlr mONSNetworkScanCtlr;
     @Mock
     TelephonyManager mSubscriptionBoundTelephonyManager;
+    @Mock
+    ISub mISubMock;
+    @Mock
+    IBinder mISubBinderMock;
+    @Mock
+    SubscriptionInfo mSubInfo;
     private Looper mLooper;
     private static final String TAG = "ONSProfileSelectorTest";
 
@@ -103,15 +114,30 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         }
     }
 
+    private void addISubService() throws Exception {
+        Field field = ServiceManager.class.getDeclaredField("sCache");
+        field.setAccessible(true);
+        ((Map<String, IBinder>)field.get(null)).put("isub", mISubBinderMock);
+        doReturn(mISubMock).when(mISubBinderMock).queryLocalInterface(any());
+    }
+
+    private void removeISubService() throws Exception {
+        Field field = ServiceManager.class.getDeclaredField("sCache");
+        field.setAccessible(true);
+        ((Map<String, IBinder>)field.get(null)).remove("isub");
+    }
+
     @Before
     public void setUp() throws Exception {
         super.setUp("ONSTest");
         mLooper = null;
         MockitoAnnotations.initMocks(this);
+        addISubService();
     }
 
     @After
     public void tearDown() throws Exception {
+        removeISubService();
         super.tearDown();
         if (mLooper != null) {
             mLooper.quit();
@@ -176,12 +202,14 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
 
     @Test
     public void testStartProfileSelectionSuccess() {
+        int subId = 5;
         List<SubscriptionInfo> subscriptionInfoList = new ArrayList<SubscriptionInfo>();
-        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
+        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(subId, "", 1, "TMO", "TMO", 1, 1,
             "123", 1, null, "310", "210", "", false, null, "1");
         SubscriptionInfo subscriptionInfo2 = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
             "123", 1, null, "310", "211", "", false, null, "1");
         subscriptionInfoList.add(subscriptionInfo);
+        doReturn(subscriptionInfo).when(mSubscriptionManager).getActiveSubscriptionInfo(subId);
 
         List<CellInfo> results2 = new ArrayList<CellInfo>();
         CellIdentityLte cellIdentityLte = new CellIdentityLte(310, 210, 1, 1, 1);
@@ -190,7 +218,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         results2.add((CellInfo) cellInfoLte);
         ArrayList<String> mccMncs = new ArrayList<>();
         mccMncs.add("310210");
-        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs,
+        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(subId, 1, mccMncs,
             new ArrayList<Integer>());
         ArrayList<AvailableNetworkInfo> availableNetworkInfos = new ArrayList<AvailableNetworkInfo>();
         availableNetworkInfos.add(availableNetworkInfo);
@@ -210,7 +238,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
                 Looper.prepare();
                 doReturn(subscriptionInfoList).when(mSubscriptionManager)
                     .getOpportunisticSubscriptions();
-                doReturn(true).when(mSubscriptionManager).isActiveSubId(anyInt());
+                doReturn(true).when(mSubscriptionManager).isActiveSubId(subId);
                 doReturn(true).when(mSubscriptionBoundTelephonyManager).enableModemForSlot(
                     anyInt(), anyBoolean());
                 mONSProfileSelector = new MyONSProfileSelector(mContext,
@@ -239,7 +267,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         mONSProfileSelector.mNetworkAvailableCallBackCpy.onNetworkAvailability(results2);
         Intent callbackIntent = new Intent(MyONSProfileSelector.ACTION_SUB_SWITCH);
         callbackIntent.putExtra("sequenceId", 1);
-        callbackIntent.putExtra("subId", 5);
+        callbackIntent.putExtra("subId", subId);
         waitUntilReady();
         assertEquals(TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SUCCESS, mResult);
         assertTrue(mReady);
@@ -257,6 +285,8 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         SubscriptionInfo subscriptionInfo_2 = new SubscriptionInfo(8, "", 1, "Vzw", "Vzw", 1, 1,
                 "123", 1, null, "311", "480", "", false, null, "1");
         subscriptionInfoList.add(subscriptionInfo_2);
+        doReturn(subscriptionInfo).when(mSubscriptionManager).getActiveSubscriptionInfo(5);
+        doReturn(subscriptionInfo_2).when(mSubscriptionManager).getActiveSubscriptionInfo(8);
 
         List<CellInfo> results2 = new ArrayList<CellInfo>();
         CellIdentityLte cellIdentityLte = new CellIdentityLte(310, 210, 1, 1, 1);
@@ -330,6 +360,8 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
             "123", 1, null, "310", "211", "", true, null, "1", false, null, 1839, 1);
         opportunisticSubscriptionInfoList.add(subscriptionInfo);
         activeSubscriptionInfoList.add(subscriptionInfo2);
+        doReturn(subscriptionInfo).when(mSubscriptionManager).getActiveSubscriptionInfo(5);
+        doReturn(subscriptionInfo2).when(mSubscriptionManager).getActiveSubscriptionInfo(6);
 
         ArrayList<String> mccMncs = new ArrayList<>();
         mccMncs.add("310210");
@@ -427,6 +459,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         SubscriptionInfo subscriptionInfo = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
             "123", 1, null, "310", "210", "", false, null, "1");
         subscriptionInfoList.add(subscriptionInfo);
+        doReturn(subscriptionInfo).when(mSubscriptionManager).getActiveSubscriptionInfo(5);
         mReady = false;
         doReturn(new ArrayList<>()).when(mSubscriptionManager).getOpportunisticSubscriptions();
         new Thread(new Runnable() {
@@ -457,6 +490,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         SubscriptionInfo subscriptionInfo = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
             "123", 1, null, "310", "210", "", false, null, "1");
         subscriptionInfoList.add(subscriptionInfo);
+        doReturn(subscriptionInfo).when(mSubscriptionManager).getActiveSubscriptionInfo(5);
         mReady = false;
         doReturn(subscriptionInfoList).when(mSubscriptionManager).getOpportunisticSubscriptions();
         doNothing().when(mSubscriptionManager).setPreferredDataSubscriptionId(
@@ -491,6 +525,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         SubscriptionInfo subscriptionInfo = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
             "123", 1, null, "310", "210", "", false, null, "1");
         subscriptionInfoList.add(subscriptionInfo);
+        doReturn(subscriptionInfo).when(mSubscriptionManager).getActiveSubscriptionInfo(5);
         mReady = false;
         doReturn(subscriptionInfoList).when(mSubscriptionManager)
             .getActiveSubscriptionInfoList();
@@ -527,9 +562,11 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         List<SubscriptionInfo> subscriptionInfoList = new ArrayList<SubscriptionInfo>();
         SubscriptionInfo subscriptionInfo = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
             "123", 1, null, "310", "210", "", false, null, "1");
-        SubscriptionInfo subscriptionInfo2 = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
+        SubscriptionInfo subscriptionInfo2 = new SubscriptionInfo(6, "", 1, "TMO", "TMO", 1, 1,
             "123", 1, null, "310", "211", "", false, null, "1");
         subscriptionInfoList.add(subscriptionInfo);
+        doReturn(subscriptionInfo).when(mSubscriptionManager).getActiveSubscriptionInfo(5);
+        doReturn(subscriptionInfo2).when(mSubscriptionManager).getActiveSubscriptionInfo(6);
 
         List<CellInfo> results2 = new ArrayList<CellInfo>();
         CellIdentityLte cellIdentityLte = new CellIdentityLte(310, 210, 1, 1, 1);
@@ -538,7 +575,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         results2.add((CellInfo) cellInfoLte);
         ArrayList<String> mccMncs = new ArrayList<>();
         mccMncs.add("310210");
-        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(1, 1, mccMncs,
+        AvailableNetworkInfo availableNetworkInfo = new AvailableNetworkInfo(5, 1, mccMncs,
             new ArrayList<Integer>());
         ArrayList<AvailableNetworkInfo> availableNetworkInfos = new ArrayList<AvailableNetworkInfo>();
         availableNetworkInfos.add(availableNetworkInfo);
@@ -633,6 +670,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         SubscriptionInfo subscriptionInfo = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
                 "123", 1, null, "310", "210", "", true, null, "1", true, null, 0, 0);
         subscriptionInfoList.add(subscriptionInfo);
+        doReturn(subscriptionInfo).when(mSubscriptionManager).getActiveSubscriptionInfo(5);
 
         IUpdateAvailableNetworksCallback mCallback = new IUpdateAvailableNetworksCallback.Stub() {
             @Override
@@ -672,7 +710,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         }).start();
         waitUntilReady();
         waitForMs(500);
-        assertEquals(mONSProfileSelector.getCurrentPreferredData(), SubscriptionManager.DEFAULT_SUBSCRIPTION_ID);
+        assertEquals(SubscriptionManager.DEFAULT_SUBSCRIPTION_ID, mONSProfileSelector.getCurrentPreferredData());
     }
 
     @Test
@@ -681,6 +719,7 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         SubscriptionInfo subscriptionInfo = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
                 "123", 1, null, "310", "210", "", true, null, "1", true, null, 0, 0);
         subscriptionInfoList.add(subscriptionInfo);
+        doReturn(subscriptionInfo).when(mSubscriptionManager).getActiveSubscriptionInfo(5);
 
         IUpdateAvailableNetworksCallback mCallback = new IUpdateAvailableNetworksCallback.Stub() {
             @Override

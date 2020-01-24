@@ -15,28 +15,10 @@
 -->
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          xmlns:androidprv="http://schemas.android.com/apk/prv/res/android"
-          package="com.android.ons"
-          coreApp="true"
-          android:process="com.android.phone"
-          android:sharedUserId="android.uid.phone">
+          package="com.android.ons.lib">
 
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <application
-        android:process="com.android.phone"
-        android:persistent="true">
-
-        <receiver android:name="ONSAutoBoot"
-            android:directBootAware="true">
-            <intent-filter>
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
-
-        <service android:name=".OpportunisticNetworkService"
-                 android:enabled="true"
-                 android:exported="true"
-                 android:directBootAware="true"/>
-
+    <application>
+        <library android:name="com.android.ons.lib" />
     </application>
+
 </manifest>

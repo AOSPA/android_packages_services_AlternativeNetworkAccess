@@ -16,7 +16,7 @@
 package com.android.ons;
 
 import android.content.Context;
-import android.telephony.Rlog;
+import com.android.telephony.Rlog;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.test.AndroidTestCase;

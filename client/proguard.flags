@@ -1,0 +1,3 @@
+# Keep the stub class
+-keep class com.android.ons.OnsStub {*;}
+-verbose

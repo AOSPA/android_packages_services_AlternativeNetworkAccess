@@ -29,14 +29,15 @@ import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
-import android.os.Message;
 import android.os.IBinder;
+import android.os.Message;
 import android.os.RemoteException;
-import android.os.ServiceManager;
+import android.os.TelephonyServiceManager.ServiceRegisterer;
 import android.telephony.AvailableNetworkInfo;
-import android.telephony.Rlog;
+import com.android.telephony.Rlog;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
+import android.telephony.TelephonyFrameworkInitializer;
 import android.telephony.TelephonyManager;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -69,7 +70,6 @@ public class OpportunisticNetworkService extends Service {
     private static final String TAG = "ONS";
     private static final String PREF_NAME = TAG;
     private static final String PREF_ENABLED = "isEnabled";
-    private static final String SERVICE_NAME = "ions";
     private static final String CARRIER_APP_CONFIG_NAME = "carrierApp";
     private static final String SYSTEM_APP_CONFIG_NAME = "systemApp";
     private static final boolean DBG = true;
@@ -336,8 +336,11 @@ public class OpportunisticNetworkService extends Service {
         initialize(getBaseContext());
 
         /* register the service */
-        if (ServiceManager.getService(SERVICE_NAME) == null) {
-            ServiceManager.addService(SERVICE_NAME, mBinder);
+        ServiceRegisterer opportunisticNetworkServiceRegisterer = TelephonyFrameworkInitializer
+                .getTelephonyServiceManager()
+                .getOpportunisticNetworkServiceRegisterer();
+        if (opportunisticNetworkServiceRegisterer.get() == null) {
+            opportunisticNetworkServiceRegisterer.register(mBinder);
         }
     }
 

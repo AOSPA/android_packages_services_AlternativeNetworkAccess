@@ -15,6 +15,7 @@
  */
 package com.android.ons;
 
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -23,12 +24,14 @@ import static org.mockito.Mockito.verify;
 import android.content.Intent;
 import android.os.Looper;
 import android.os.RemoteException;
-import android.os.ServiceManager;
 import android.telephony.AvailableNetworkInfo;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
+import android.telephony.TelephonyFrameworkInitializer;
 import android.telephony.TelephonyManager;
 import android.util.Log;
+
+import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.telephony.IOns;
 import com.android.internal.telephony.ISetOpportunisticDataCallback;
@@ -39,12 +42,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import static org.mockito.Mockito.any;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-
-import androidx.test.runner.AndroidJUnit4;
 
 @RunWith(AndroidJUnit4.class)
 public class OpportunisticNetworkServiceTest extends ONSBaseTest {
@@ -74,23 +74,15 @@ public class OpportunisticNetworkServiceTest extends ONSBaseTest {
             public void run() {
                 Looper.prepare();
                 mOpportunisticNetworkService = new OpportunisticNetworkService();
-                mContext.startService(intent);
                 mOpportunisticNetworkService.initialize(mContext);
-                mOpportunisticNetworkService.mContext = mContext;
                 mOpportunisticNetworkService.mSubscriptionManager = mSubscriptionManager;
+                iOpportunisticNetworkService = (IOns) mOpportunisticNetworkService.onBind(null);
                 mLooper = Looper.myLooper();
+                setReady(true);
                 Looper.loop();
             }
         }).start();
-        iOpportunisticNetworkService = getIOns();
-        for (int i = 0; i < 5; i++) {
-            if (iOpportunisticNetworkService == null) {
-                waitForMs(500);
-                iOpportunisticNetworkService = getIOns();
-            } else {
-                break;
-            }
-        }
+        waitUntilReady(200);
     }
 
     @After
@@ -359,7 +351,11 @@ public class OpportunisticNetworkServiceTest extends ONSBaseTest {
     }
 
     private IOns getIOns() {
-        return IOns.Stub.asInterface(ServiceManager.getService("ions"));
+        return IOns.Stub.asInterface(
+                TelephonyFrameworkInitializer
+                        .getTelephonyServiceManager()
+                        .getOpportunisticNetworkServiceRegisterer()
+                        .get());
     }
 
     public static void waitForMs(long ms) {

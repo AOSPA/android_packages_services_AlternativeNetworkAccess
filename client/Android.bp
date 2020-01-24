@@ -12,22 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-android_test {
-    name: "ONSTests",
-    srcs: ["src/com/android/ons//**/*.java"],
-    libs: [
-        "android.test.runner",
-        "telephony-common",
-        "android.test.mock",
-        "android.test.base",
-    ],
-    static_libs: [
-        "androidx.test.rules",
-        "mockito-target",
-        "platform-test-annotations",
-    ],
+android_app {
+    name: "ONS",
     platform_apis: true,
+    privileged: true,
+    libs: [
+        "telephony-common",
+        "ONSLib",
+    ],
+    srcs: [
+        "src/**/*.java",
+    ],
+    required: ["ONSLib"],
     certificate: "platform",
-    instrumentation_for: "ONSLib",
-    test_suites: ["device-tests"],
+
+    optimize: {
+        proguard_flags_files: [
+            "proguard.flags",
+        ],
+    },
 }

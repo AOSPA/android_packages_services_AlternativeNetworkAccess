@@ -34,10 +34,11 @@ import android.os.ServiceManager;
 import android.telephony.AvailableNetworkInfo;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoLte;
-import android.telephony.Rlog;
+import com.android.telephony.Rlog;
 import android.telephony.SignalStrength;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
+import android.telephony.TelephonyFrameworkInitializer;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 
@@ -674,7 +675,9 @@ public class ONSProfileSelector {
     }
 
     private boolean enableModem(int subId, boolean enable) {
-        if (!mSubscriptionManager.isActiveSubId(subId)) {
+        SubscriptionInfo info = mSubscriptionManager.getActiveSubscriptionInfo(subId);
+        if (info == null) {
+            // Subscription is not active. Do nothing.
             return false;
         }
 
@@ -684,7 +687,7 @@ public class ONSProfileSelector {
                 selectProfileForData(SubscriptionManager.DEFAULT_SUBSCRIPTION_ID, false, null);
             }
         }
-        int phoneId = SubscriptionManager.getPhoneId(subId);
+        int phoneId = info.getSimSlotIndex();
         /*  Todo: b/135067156
          *  Reenable this code once 135067156 is fixed
         if (mSubscriptionBoundTelephonyManager.isModemEnabledForSlot(phoneId) == enable) {
@@ -802,7 +805,11 @@ public class ONSProfileSelector {
             ISetOpportunisticDataCallback callbackStub) {
         if ((subId == SubscriptionManager.DEFAULT_SUBSCRIPTION_ID)
                 || (isOpprotunisticSub(subId) && mSubscriptionManager.isActiveSubId(subId))) {
-            ISub iSub = ISub.Stub.asInterface(ServiceManager.getService("isub"));
+            ISub iSub = ISub.Stub.asInterface(
+                    TelephonyFrameworkInitializer
+                            .getTelephonyServiceManager()
+                            .getSubscriptionServiceRegisterer()
+                            .get());
             if (iSub == null) {
                 log("Could not get Subscription Service handle");
                 if (Compatibility.isChangeEnabled(
