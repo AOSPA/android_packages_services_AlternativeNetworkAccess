@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//
+// Mms service
+//
 android_app {
-    name: "ONSLib",
+    name: "ONS",
     platform_apis: true,
     privileged: true,
     libs: [
@@ -21,17 +24,9 @@ android_app {
         "app-compat-annotations",
     ],
     srcs: ["src/**/*.java"],
-    aaptflags: [
-        "--auto-add-overlay",
-        "--shared-lib",
-        "--extra-packages com.android.ons",
-    ],
+    aaptflags: ["--auto-add-overlay"],
     certificate: "platform",
     optimize: {
-        proguard_flags_files: [
-            "proguard.flags",
-            "proguard.proguard",
-        ],
+        proguard_flags_files: ["proguard.flags"],
     },
-    export_package_resources: true,
 }
