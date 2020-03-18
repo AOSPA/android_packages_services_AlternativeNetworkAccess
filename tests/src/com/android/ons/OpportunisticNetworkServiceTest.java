@@ -67,7 +67,7 @@ public class OpportunisticNetworkServiceTest extends ONSBaseTest {
     public void setUp() throws Exception {
         super.setUp("ONSTest");
         pkgForDebug = mContext != null ? mContext.getOpPackageName() : "<unknown>";
-        pkgForFeature = mContext != null ? mContext.getFeatureId() : null;
+        pkgForFeature = mContext != null ? mContext.getAttributionTag() : null;
         Intent intent = new Intent(mContext, OpportunisticNetworkService.class);
         new Thread(new Runnable() {
             @Override
