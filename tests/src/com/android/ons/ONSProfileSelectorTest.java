@@ -82,6 +82,14 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
             updateOpportunisticSubscriptions();
         }
 
+        public int getCurrentPreferredData() {
+            return mCurrentDataSubId;
+        }
+
+        public void setCurrentPreferredData(int subId) {
+            mCurrentDataSubId = subId;
+        }
+
         protected void init(Context c,
             MyONSProfileSelector.ONSProfileSelectionCallback aNSProfileSelectionCallback) {
             super.init(c, aNSProfileSelectionCallback);
@@ -543,4 +551,101 @@ public class ONSProfileSelectorTest extends ONSBaseTest {
         assertEquals(TelephonyManager.UPDATE_AVAILABLE_NETWORKS_SUCCESS, mResult);
         assertTrue(mReady);
     }
+
+    @Test
+    public void testStopProfileSelectionWithPreferredDataOnSame() {
+        List<SubscriptionInfo> subscriptionInfoList = new ArrayList<SubscriptionInfo>();
+        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
+                "123", 1, null, "310", "210", "", true, null, "1", true, null, 0, 0);
+        subscriptionInfoList.add(subscriptionInfo);
+
+        IUpdateAvailableNetworksCallback mCallback = new IUpdateAvailableNetworksCallback.Stub() {
+            @Override
+            public void onComplete(int result) {
+                mResult = result;
+            }
+        };
+
+        mResult = -1;
+        mReady = false;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Looper.prepare();
+                doReturn(subscriptionInfoList).when(mSubscriptionManager)
+                        .getOpportunisticSubscriptions();
+                doReturn(true).when(mSubscriptionManager).isActiveSubId(anyInt());
+                doReturn(true).when(mSubscriptionBoundTelephonyManager).enableModemForSlot(
+                        anyInt(), anyBoolean());
+                doReturn(5).when(mSubscriptionManager).getPreferredDataSubscriptionId();
+                doReturn(subscriptionInfoList).when(mSubscriptionManager)
+                        .getActiveSubscriptionInfoList(anyBoolean());
+
+                mONSProfileSelector = new MyONSProfileSelector(mContext,
+                        new MyONSProfileSelector.ONSProfileSelectionCallback() {
+                            public void onProfileSelectionDone() {
+                                setReady(true);
+                            }
+                        });
+                mONSProfileSelector.updateOppSubs();
+                mONSProfileSelector.setCurrentPreferredData(5);
+                mONSProfileSelector.stopProfileSelection(null);
+                mLooper = Looper.myLooper();
+                setReady(true);
+                Looper.loop();
+            }
+        }).start();
+        waitUntilReady();
+        waitForMs(500);
+        assertEquals(mONSProfileSelector.getCurrentPreferredData(), SubscriptionManager.DEFAULT_SUBSCRIPTION_ID);
+    }
+
+    @Test
+    public void testStopProfileSelectionWithPreferredDataOnDifferent() {
+        List<SubscriptionInfo> subscriptionInfoList = new ArrayList<SubscriptionInfo>();
+        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(5, "", 1, "TMO", "TMO", 1, 1,
+                "123", 1, null, "310", "210", "", true, null, "1", true, null, 0, 0);
+        subscriptionInfoList.add(subscriptionInfo);
+
+        IUpdateAvailableNetworksCallback mCallback = new IUpdateAvailableNetworksCallback.Stub() {
+            @Override
+            public void onComplete(int result) {
+                mResult = result;
+            }
+        };
+
+        mResult = -1;
+        mReady = false;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Looper.prepare();
+                doReturn(subscriptionInfoList).when(mSubscriptionManager)
+                        .getOpportunisticSubscriptions();
+                doReturn(true).when(mSubscriptionManager).isActiveSubId(anyInt());
+                doReturn(true).when(mSubscriptionBoundTelephonyManager).enableModemForSlot(
+                        anyInt(), anyBoolean());
+                doReturn(4).when(mSubscriptionManager).getPreferredDataSubscriptionId();
+                doReturn(subscriptionInfoList).when(mSubscriptionManager)
+                        .getActiveSubscriptionInfoList(anyBoolean());
+
+                mONSProfileSelector = new MyONSProfileSelector(mContext,
+                        new MyONSProfileSelector.ONSProfileSelectionCallback() {
+                            public void onProfileSelectionDone() {
+                                setReady(true);
+                            }
+                        });
+                mONSProfileSelector.updateOppSubs();
+                mONSProfileSelector.setCurrentPreferredData(5);
+                mONSProfileSelector.stopProfileSelection(null);
+                mLooper = Looper.myLooper();
+                setReady(true);
+                Looper.loop();
+            }
+        }).start();
+        waitUntilReady();
+        waitForMs(500);
+        assertEquals(mONSProfileSelector.getCurrentPreferredData(), 5);
+    }
+
 }
